@@ -5,6 +5,7 @@ pub mod macros;
 pub mod middleware;
 pub mod reqwest;
 pub mod test;
+pub mod utils;
 pub mod validators;
 pub mod web_core;
 
