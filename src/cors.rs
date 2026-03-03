@@ -22,7 +22,7 @@ impl<T> WithCorsLayer for Router<WebCoreState<T>> where T: Clone + Send + Sync +
 pub fn generate_cors(frontend_url: Option<String>) -> CorsLayer {
     #[allow(unused_mut)]
     let mut cors = CorsLayer::new()
-    .allow_credentials(true)
+    .allow_credentials(false)
     .allow_headers([ACCEPT, AUTHORIZATION, CONTENT_TYPE])
     .allow_methods([Method::POST, Method::PUT, Method::DELETE, Method::GET]);
 
