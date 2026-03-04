@@ -20,7 +20,7 @@ where
     }
 }
 
-pub fn generate_cors(mut frontend_url: Option<String>) -> CorsLayer {
+pub fn generate_cors(frontend_url: Option<String>) -> CorsLayer {
     #[allow(unused_mut)]
     let mut cors = CorsLayer::new()
         .allow_credentials(false)
@@ -34,12 +34,17 @@ pub fn generate_cors(mut frontend_url: Option<String>) -> CorsLayer {
         ]);
 
     if let Some(frontend_url) = &frontend_url {
-        cors = cors.allow_origin(
-            frontend_url
-                .trim_end_matches("/")
-                .parse::<HeaderValue>()
-                .unwrap(),
-        );
+        let frontend_url = frontend_url.trim_end_matches("/");
+        let frontend_url_2 = if frontend_url.contains("https://www.") {
+            frontend_url.replace("https://www.", "https://")
+        } else {
+            frontend_url.replace("https://", "https://www.")
+        };
+
+        cors = cors.allow_origin([
+            frontend_url_2.parse::<HeaderValue>().unwrap(),
+            frontend_url.parse::<HeaderValue>().unwrap(),
+        ]);
     }
 
     #[cfg(feature = "local")]
