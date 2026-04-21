@@ -8,19 +8,19 @@ use tower_http::cors::CorsLayer;
 use crate::web_core::WebCoreState;
 
 pub trait WithCorsLayer {
-    fn with_cors_layer(self, frontend_url: Option<String>) -> Self;
+    fn with_cors_layer(self, frontend_url: Vec<String>) -> Self;
 }
 
 impl<T> WithCorsLayer for Router<WebCoreState<T>>
 where
     T: Clone + Send + Sync + 'static,
 {
-    fn with_cors_layer(self, frontend_url: Option<String>) -> Self {
+    fn with_cors_layer(self, frontend_url: Vec<String>) -> Self {
         self.layer(generate_cors(frontend_url))
     }
 }
 
-pub fn generate_cors(frontend_url: Option<String>) -> CorsLayer {
+pub fn generate_cors(frontend_urls: Vec<String>) -> CorsLayer {
     #[allow(unused_mut)]
     let mut cors = CorsLayer::new()
         .allow_credentials(false)
@@ -33,8 +33,8 @@ pub fn generate_cors(frontend_url: Option<String>) -> CorsLayer {
             Method::OPTIONS,
         ]);
 
-    if let Some(frontend_url) = &frontend_url {
-        let frontend_url = frontend_url.trim_end_matches("/");
+    for url in frontend_urls {
+        let frontend_url = url.trim_end_matches("/");
         let frontend_url_2 = if frontend_url.contains("https://www.") {
             frontend_url.replace("https://www.", "https://")
         } else {
@@ -46,7 +46,6 @@ pub fn generate_cors(frontend_url: Option<String>) -> CorsLayer {
             frontend_url.parse::<HeaderValue>().unwrap(),
         ]);
     }
-
     #[cfg(feature = "local")]
     {
         use tower_http::cors::Any;

@@ -27,7 +27,7 @@ where
     fn with_web_core(self, options: WebCoreOptions<T>) -> Router {
         let WebCoreOptions {
             web_core_state,
-            frontend_url,
+            frontend_urls: frontend_url,
         } = options;
         self.with_logging_layer()
             .with_cors_layer(frontend_url)
@@ -49,7 +49,7 @@ where
     T: Clone + Send + Sync + 'static,
 {
     web_core_state: WebCoreState<T>,
-    frontend_url: Option<String>,
+    frontend_urls: Vec<String>,
 }
 
 impl<T> WebCoreOptions<T>
@@ -59,12 +59,12 @@ where
     pub fn new(web_core_state: WebCoreState<T>) -> Self {
         Self {
             web_core_state,
-            frontend_url: None,
+            frontend_urls: vec![],
         }
     }
 
     pub fn with_frontend_url(mut self, frontend_url: String) -> Self {
-        self.frontend_url = Some(frontend_url);
+        self.frontend_urls.push(frontend_url);
         self
     }
 }
