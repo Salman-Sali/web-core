@@ -2341,7 +2341,7 @@ dependencies = [
 
 [[package]]
 name = "web-core"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "argon2",
  "async-trait",

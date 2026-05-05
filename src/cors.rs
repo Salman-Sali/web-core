@@ -33,6 +33,8 @@ pub fn generate_cors(frontend_urls: Vec<String>) -> CorsLayer {
             Method::OPTIONS,
         ]);
 
+    let mut header_values: Vec<HeaderValue> = vec![];
+
     for url in frontend_urls {
         let frontend_url = url.trim_end_matches("/");
         let frontend_url_2 = if frontend_url.contains("https://www.") {
@@ -41,11 +43,12 @@ pub fn generate_cors(frontend_urls: Vec<String>) -> CorsLayer {
             frontend_url.replace("https://", "https://www.")
         };
 
-        cors = cors.allow_origin([
-            frontend_url_2.parse::<HeaderValue>().unwrap(),
-            frontend_url.parse::<HeaderValue>().unwrap(),
-        ]);
+        header_values.push(frontend_url_2.parse::<HeaderValue>().unwrap());
+        header_values.push(frontend_url.parse::<HeaderValue>().unwrap());
     }
+
+    cors = cors.allow_origin(header_values);
+
     #[cfg(feature = "local")]
     {
         use tower_http::cors::Any;
