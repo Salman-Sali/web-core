@@ -1,6 +1,6 @@
 [package]
 name = "web-core"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2024"
 
 [dependencies]
@@ -27,7 +27,12 @@ futures = "0.3.31"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 hex = "0.4.3"
 rand_core = { version = "0.6.0", features = ["getrandom"] }
+aws-sdk-sesv2 = { version = "1.111.0", optional = true }
 
 [features]
+default = []
 local = []
 test_mode = []
+aws = [
+    "aws-sdk-sesv2"
+]

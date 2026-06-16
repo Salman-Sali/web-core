@@ -9,4 +9,7 @@ pub mod utils;
 pub mod validators;
 pub mod web_core;
 
+#[cfg(feature = "aws")]
+pub mod aws;
+
 pub use serde_json;
