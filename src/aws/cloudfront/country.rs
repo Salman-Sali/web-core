@@ -3,7 +3,7 @@ use std::str::FromStr;
 /// ISO 3166-1 alpha-2 country codes as sent by CloudFront in the
 /// `cloudfront-viewer-country` header.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum CloudFrontCountry {
     Afghanistan,
     AlandIslands,
