@@ -1,0 +1,20 @@
+[package]
+name = "web-core-derive"
+version = "0.1.15"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.107"
+quote = "1.0.47"
+syn = "3.0.3"
+
+
+[features]
+diesel = []
+all = ["diesel"]
+
+[dev-dependencies]
+web-core-derive = { path = ".", features = ["all"] }

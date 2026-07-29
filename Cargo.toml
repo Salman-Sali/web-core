@@ -1,6 +1,6 @@
 [package]
 name = "web-core"
-version = "0.1.14"
+version = "0.1.15"
 edition = "2024"
 
 [dependencies]
@@ -36,3 +36,6 @@ test_mode = []
 aws = [
     "aws-sdk-sesv2"
 ]
+
+[workspace]
+members = ["web-core-derive"]
