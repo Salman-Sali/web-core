@@ -2,6 +2,7 @@
 name = "web-core-derive"
 version = "0.1.15"
 edition = "2024"
+publish = false
 
 [lib]
 proc-macro = true

@@ -1,4 +1,5 @@
 use std::{
+    any::{Any, TypeId},
     fmt::{Debug, Display},
     usize,
 };
@@ -93,12 +94,12 @@ pub trait RouterExtensions {
         R: JsonType,
         E: JsonType;
 
-    async fn one_shot_without_result<E>(
-        self,
-        request: Request<Body>,
-    ) -> Result<(), ErrorResponse<E>>
-    where
-        E: JsonType;
+    // async fn one_shot_without_result<E>(
+    //     self,
+    //     request: Request<Body>,
+    // ) -> Result<(), ErrorResponse<E>>
+    // where
+    //     E: JsonType;
 }
 
 #[async_trait]
@@ -216,7 +217,7 @@ impl RouterExtensions for Router {
             .header("Authorization", format!("Bearer {access_token}"))
             .body(Body::Empty)
             .expect("Error while creating request.");
-        self.one_shot_without_result::<E>(request).await
+        self.one_shot::<(), E>(request).await
     }
 
     async fn one_shot<R, E>(self, request: Request<Body>) -> Result<R, ErrorResponse<E>>
@@ -235,6 +236,12 @@ impl RouterExtensions for Router {
             .expect("Error while converting response body into bytes.");
 
         return if status.is_success() {
+            if TypeId::of::<R>() == TypeId::of::<()>() {
+                let boxed: Box<dyn Any> = Box::new(());
+                let unit_box = boxed.downcast::<R>().unwrap();
+                return Ok(*unit_box);
+            }
+
             Ok(serde_json::from_slice(&bytes)
                 .expect("Error while converting json bytes into struct object."))
         } else {
@@ -245,30 +252,30 @@ impl RouterExtensions for Router {
         };
     }
 
-    async fn one_shot_without_result<E>(
-        self,
-        request: Request<Body>,
-    ) -> Result<(), ErrorResponse<E>>
-    where
-        E: JsonType,
-    {
-        let response = self
-            .oneshot(request)
-            .await
-            .expect("Error while sending post request.");
+    //     async fn one_shot_without_result<E>(
+    //         self,
+    //         request: Request<Body>,
+    //     ) -> Result<(), ErrorResponse<E>>
+    //     where
+    //         E: JsonType,
+    //     {
+    //         let response = self
+    //             .oneshot(request)
+    //             .await
+    //             .expect("Error while sending post request.");
 
-        let status = response.status();
-        let bytes = to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("Error while converting response body into bytes.");
+    //         let status = response.status();
+    //         let bytes = to_bytes(response.into_body(), usize::MAX)
+    //             .await
+    //             .expect("Error while converting response body into bytes.");
 
-        return if status.is_success() {
-            Ok(())
-        } else {
-            println!("{:?}", bytes);
-            let body = serde_json::from_slice(&bytes)
-                .expect("Error while converting json bytes into struct object.");
-            Err(ErrorResponse::new(status, body))
-        };
-    }
+    //         return if status.is_success() {
+    //             Ok(())
+    //         } else {
+    //             println!("{:?}", bytes);
+    //             let body = serde_json::from_slice(&bytes)
+    //                 .expect("Error while converting json bytes into struct object.");
+    //             Err(ErrorResponse::new(status, body))
+    //         };
+    //     }
 }

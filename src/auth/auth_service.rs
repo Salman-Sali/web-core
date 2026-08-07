@@ -19,6 +19,15 @@ impl AuthService {
         }
     }
 
+    ///generates both access and refresh tokens
+    pub fn generate_tokens(&self, subject: impl Into<String> + Clone) -> Result<Tokens, Error> {
+        let access_token =
+            self.generate_token(TokenOptions::new(subject.clone(), TokenPurpose::Access))?;
+        let refresh_token =
+            self.generate_token(TokenOptions::new(subject, TokenPurpose::Refresh))?;
+        Ok(Tokens::new(access_token, refresh_token))
+    }
+
     pub fn generate_token(&self, token_options: TokenOptions) -> Result<Token, Error> {
         let TokenOptions {
             subject,
@@ -38,10 +47,7 @@ impl AuthService {
     ) -> Result<JwtClaims<T>, Error> {
         let mut validation = Validation::new(jsonwebtoken::Algorithm::HS512);
 
-        #[cfg(feature = "test_mode")]
-        {
-            validation.leeway = 0;
-        }
+        validation.leeway = 0;
 
         if let Some(audience) = &self.auth_options.audience {
             validation.set_audience(&[audience.to_string()]);
@@ -107,9 +113,9 @@ pub struct TokenOptions {
 }
 
 impl TokenOptions {
-    pub fn new(subject: String, purpose: TokenPurpose) -> Self {
+    pub fn new(subject: impl Into<String>, purpose: TokenPurpose) -> Self {
         Self {
-            subject,
+            subject: subject.into(),
             additional_claims: None,
             purpose,
         }
@@ -172,7 +178,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Token {
     pub id: String,
     pub value: String,
@@ -184,8 +190,17 @@ impl Token {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Tokens {
     pub access_token: Token,
     pub refresh_token: Token,
+}
+
+impl Tokens {
+    pub fn new(access_token: Token, refresh_token: Token) -> Self {
+        Self {
+            access_token,
+            refresh_token,
+        }
+    }
 }

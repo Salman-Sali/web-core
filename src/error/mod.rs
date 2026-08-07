@@ -60,13 +60,21 @@ impl Error {
 impl IntoResponse for Error {
     fn into_response(self) -> Response {
         match self {
-            Error::FieldValidationError(field_validation_errors) => (StatusCode::BAD_REQUEST, Json(field_validation_errors)).into_response(),
-            Error::BadRequestError(bad_request_error) => (StatusCode::BAD_REQUEST, Json(serde_json::json!(bad_request_error))).into_response(),
+            Error::FieldValidationError(field_validation_errors) => {
+                (StatusCode::BAD_REQUEST, Json(field_validation_errors)).into_response()
+            }
+            Error::BadRequestError(bad_request_error) => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!(bad_request_error)),
+            )
+                .into_response(),
             Error::SomethingWentWrong(something_went_wrong) => {
                 something_went_wrong.print_error();
                 something_went_wrong.into_response()
             }
-            Error::AuthenticationFailure(authentication_error) => authentication_error.into_response(),
+            Error::AuthenticationFailure(authentication_error) => {
+                authentication_error.into_response()
+            }
             Error::NotFound(not_found_error) => not_found_error.into_response(),
         }
     }
@@ -95,5 +103,25 @@ impl From<ValidationError> for Error {
         }
         fields.insert(err.code.to_string(), err.message.unwrap().to_string());
         Error::FieldValidationError(FieldValidationErrors { fields })
+    }
+}
+
+impl From<askama::Error> for Error {
+    fn from(value: askama::Error) -> Self {
+        Error::new_something_went_wrong(format!("Error while rendering template: {value:?}"))
+    }
+}
+
+#[cfg(feature = "diesel")]
+impl From<diesel::r2d2::PoolError> for Error {
+    fn from(value: diesel::r2d2::PoolError) -> Self {
+        Error::new_something_went_wrong(format!("{} {:?}", value.to_string(), value))
+    }
+}
+
+#[cfg(feature = "diesel")]
+impl From<diesel::result::Error> for Error {
+    fn from(value: diesel::result::Error) -> Self {
+        Error::new_something_went_wrong(format!("{} {:?}", value.to_string(), value))
     }
 }

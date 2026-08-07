@@ -1,7 +1,7 @@
 use google_oauth::AsyncClient;
 
 use crate::{error::Error, something_went_wrong};
-pub async  fn verify_google_token(client_id: String, id_token: String) -> Result<String,Error > {
+pub async fn verify_google_token(client_id: String, id_token: String) -> Result<String, Error> {
     let client = AsyncClient::new(client_id.clone());
 
     let payload = client

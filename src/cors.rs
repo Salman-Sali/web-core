@@ -49,8 +49,7 @@ pub fn generate_cors(frontend_urls: Vec<String>) -> CorsLayer {
 
     cors = cors.allow_origin(header_values);
 
-    #[cfg(feature = "local")]
-    {
+    if cfg!(debug_assertions) {
         use tower_http::cors::Any;
         cors = cors.allow_origin(Any).allow_credentials(false);
     }

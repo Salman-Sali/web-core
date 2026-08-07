@@ -32,8 +32,7 @@ impl serde::Serialize for SomethingWentWrong {
             &self.error_id,
         )?;
 
-        #[cfg(any(feature = "local", feature = "test_mode"))]
-        {
+        if cfg!(debug_assertions) {
             serde::ser::SerializeStruct::serialize_field(
                 &mut _serde_state,
                 "error_details",

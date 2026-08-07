@@ -1,6 +1,6 @@
 [package]
 name = "web-core"
-version = "0.1.15"
+version = "0.1.17"
 edition = "2024"
 
 [dependencies]
@@ -28,14 +28,27 @@ ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
 hex = "0.4.3"
 rand_core = { version = "0.6.0", features = ["getrandom"] }
 aws-sdk-sesv2 = { version = "1.111.0", optional = true }
+web-core-derive = { workspace = true, optional = true }
+diesel = { version = "2.3.11",  features = ["postgres", "r2d2"], optional = true }
+askama = "0.14.0"
+diesel_migrations = { version= "2.3.2", optional = true }
+sqlx = { version = "0.8.6", features = ["postgres"] }
+phonenumber = "0.3.10"
 
 [features]
-default = []
-local = []
-test_mode = []
+default = [ ]
 aws = [
     "aws-sdk-sesv2"
 ]
+derive = ["dep:web-core-derive"]
+diesel = ["derive", "dep:diesel", "dep:diesel_migrations", "web-core-derive/diesel"]
+all = ["aws", "derive", "diesel"]
 
 [workspace]
 members = ["web-core-derive"]
+
+[dev-dependencies]
+web-core = { path = ".", features = ["all"]}
+
+[workspace.dependencies]
+web-core-derive = { path = "./web-core-derive"}
