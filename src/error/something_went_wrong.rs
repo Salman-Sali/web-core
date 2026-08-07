@@ -11,35 +11,24 @@ pub struct SomethingWentWrong {
     pub error_details: String,
 }
 
-impl serde::Serialize for SomethingWentWrong {
-    fn serialize<__S>(&self, __serializer: __S) -> serde::__private228::Result<__S::Ok, __S::Error>
-    where
-        __S: serde::Serializer,
-    {
-        let mut _serde_state = serde::Serializer::serialize_struct(
-            __serializer,
-            "SomethingWentWrong",
-            false as usize + 1 + 1,
-        )?;
-        serde::ser::SerializeStruct::serialize_field(
-            &mut _serde_state,
-            "error",
-            "Something went wrong",
-        )?;
-        serde::ser::SerializeStruct::serialize_field(
-            &mut _serde_state,
-            "error_id",
-            &self.error_id,
-        )?;
+use serde::ser::SerializeStruct;
+use std::result::Result;
 
+impl serde::Serialize for SomethingWentWrong {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let field_count = if cfg!(debug_assertions) { 3 } else { 2 };
+        let mut state = serializer.serialize_struct("SomethingWentWrong", field_count)?;
+
+        state.serialize_field("error", "Something went wrong")?;
+        state.serialize_field("error_id", &self.error_id)?;
         if cfg!(debug_assertions) {
-            serde::ser::SerializeStruct::serialize_field(
-                &mut _serde_state,
-                "error_details",
-                &self.error_details,
-            )?;
+            state.serialize_field("error_details", &self.error_details)?;
         }
-        serde::ser::SerializeStruct::end(_serde_state)
+
+        state.end()
     }
 }
 

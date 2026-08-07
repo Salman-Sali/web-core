@@ -1,36 +1,30 @@
 use axum::{Json, response::IntoResponse};
 use http::StatusCode;
+use serde::ser::SerializeStruct;
 
 #[derive(Debug, serde::Deserialize)]
 pub struct AuthenticationError {
     pub error_details: String,
 }
 
-impl IntoResponse for AuthenticationError {
-    fn into_response(self) -> axum::response::Response {
-        (StatusCode::UNAUTHORIZED, Json(serde_json::json!(self))).into_response()
+impl serde::Serialize for AuthenticationError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let field_count = if cfg!(debug_assertions) { 2 } else { 1 };
+        let mut state = serializer.serialize_struct("AuthenticationError", field_count)?;
+        state.serialize_field("error", "Unauthorized")?;
+        if cfg!(debug_assertions) {
+            state.serialize_field("error_details", &self.error_details)?;
+        }
+        state.end()
     }
 }
 
-impl serde::Serialize for AuthenticationError {
-    fn serialize<__S>(&self, __serializer: __S) -> serde::__private228::Result<__S::Ok, __S::Error>
-    where
-        __S: serde::Serializer,
-    {
-        let mut _serde_state = serde::Serializer::serialize_struct(
-            __serializer,
-            "AuthenticationError",
-            false as usize + 1,
-        )?;
-        serde::ser::SerializeStruct::serialize_field(&mut _serde_state, "error", "Unauthorized")?;
-        if cfg!(debug_assertions) {
-            serde::ser::SerializeStruct::serialize_field(
-                &mut _serde_state,
-                "error_details",
-                &self.error_details,
-            )?;
-        }
-        serde::ser::SerializeStruct::end(_serde_state)
+impl IntoResponse for AuthenticationError {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::UNAUTHORIZED, Json(serde_json::json!(self))).into_response()
     }
 }
 
