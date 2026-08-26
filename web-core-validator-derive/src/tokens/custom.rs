@@ -10,9 +10,14 @@ pub fn custom_tokens(
 ) -> proc_macro2::TokenStream {
     let fn_call = custom.function.unwrap();
 
-    let args = match custom.use_context {
-        Some(true) => quote!(#field_name, args, state),
-        _ => quote!(#field_name, state),
+    let args = if let Some(arg) = custom.use_context {
+        if arg {
+            quote!(#field_name, args)
+        } else {
+            quote!(#field_name)
+        }
+    } else {
+        quote!(#field_name)
     };
 
     let message = quote_message(custom.message);

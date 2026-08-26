@@ -375,7 +375,7 @@ pub fn derive_validation(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     });
 
     let ident = validation_data.ident;
-    let (_imp, ty, whr) = validation_data.generics.split_for_impl();
+    let (imp, ty, whr) = validation_data.generics.split_for_impl();
 
     let struct_generics_quote =
         validation_data
@@ -399,27 +399,18 @@ pub fn derive_validation(input: proc_macro::TokenStream) -> proc_macro::TokenStr
                 q
             });
 
-    // Different impl blocks for with/without context
-    // Context uses 'v_a lifetime, without context we use 'static
-    let has_context = validation_data.context.is_some();
-
-    // Build impl generics
-    let (impl_generics_no_context, impl_generics_with_context) = if struct_generics_quote.is_empty()
-    {
-        (quote!(<__S: Send + Sync>), quote!(<'v_a, __S: Send + Sync>))
+    let imp_args = if struct_generics_quote.is_empty() {
+        quote!(<'v_a>)
     } else {
-        (
-            quote!(<__S: Send + Sync, #struct_generics_quote>),
-            quote!(<'v_a, __S: Send + Sync, #struct_generics_quote>),
-        )
+        quote!(<'v_a, #struct_generics_quote>)
     };
 
-    let argless_validation = if !has_context {
+    let argless_validation = if validation_data.context.is_none() {
         quote! {
-            impl #impl_generics_no_context #crate_name::Validate<__S> for #ident #ty #whr {
-                async fn validate(&self, state: &__S) -> ::std::result::Result<(), #crate_name::ValidationErrors> {
+            impl #imp #crate_name::Validate for #ident #ty #whr {
+                async fn validate(&self) -> ::std::result::Result<(), #crate_name::ValidationErrors> {
                     use #crate_name::ValidateArgs;
-                    self.validate_with_args((), state).await
+                    self.validate_with_args(()).await
                 }
             }
         }
@@ -427,23 +418,27 @@ pub fn derive_validation(input: proc_macro::TokenStream) -> proc_macro::TokenStr
         quote!()
     };
 
-    let (impl_generics, trait_lifetime) = if has_context {
-        (impl_generics_with_context, quote!('v_a))
+    // Generate HasContext impl when context is specified
+    let has_context_impl = if let Some(context) = &validation_data.context {
+        quote! {
+            impl #imp #crate_name::HasContext<#context> for #ident #ty #whr {}
+        }
     } else {
-        (impl_generics_no_context, quote!('static))
+        quote!()
     };
 
     quote!(
         #argless_validation
 
-        impl #impl_generics #crate_name::ValidateArgs<#trait_lifetime, __S> for #ident #ty #whr {
+        #has_context_impl
+
+        impl #imp_args #crate_name::ValidateArgs<'v_a> for #ident #ty #whr {
             type Args = #custom_context;
 
-            async fn validate_with_args(&self, args: Self::Args, __state: &__S)
+            async fn validate_with_args(&self, args: Self::Args)
             -> ::std::result::Result<(), #crate_name::ValidationErrors>
              {
                 #use_statements
-                let state = __state;
 
                 let mut errors = #crate_name::ValidationErrors::new();
 

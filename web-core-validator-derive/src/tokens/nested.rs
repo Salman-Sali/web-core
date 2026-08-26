@@ -6,7 +6,7 @@ pub fn nested_tokens(
 ) -> proc_macro2::TokenStream {
     quote! {
         if let std::collections::hash_map::Entry::Vacant(entry) = errors.0.entry(::std::borrow::Cow::Borrowed(#field_name_str)) {
-            errors.merge_self(#field_name_str, (&#field_name).validate(state).await);
+            errors.merge_self(#field_name_str, (&#field_name).validate().await);
         }
     }
 }

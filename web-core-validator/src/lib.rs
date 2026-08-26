@@ -79,7 +79,7 @@ pub use validation::regex::{AsRegex, ValidateRegex};
 pub use validation::required::ValidateRequired;
 pub use validation::urls::ValidateUrl;
 
-pub use traits::{Validate, ValidateArgs};
+pub use traits::{HasContext, Validate, ValidateArgs};
 pub use types::{ValidationError, ValidationErrors, ValidationErrorsKind};
 
 #[cfg(feature = "derive")]

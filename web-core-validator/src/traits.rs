@@ -8,27 +8,27 @@ use std::future::Future;
 /// implemented for struct validations that don't take custom arguments. The call is being
 /// forwarded to the `ValidateArgs<'v_a>` trait.
 #[trait_variant::make(Send)]
-pub trait Validate<S: Send + Sync> {
-    fn validate(&self, state: &S) -> impl Future<Output = Result<(), ValidationErrors>>;
+pub trait Validate {
+    fn validate(&self) -> impl Future<Output = Result<(), ValidationErrors>>;
 }
 
-impl<T: Validate<S> + Send + Sync, S: Send + Sync> Validate<S> for &T {
-    async fn validate(&self, state: &S) -> Result<(), ValidationErrors> {
-        T::validate(self, state).await
+impl<T: Validate + Send + Sync> Validate for &T {
+    async fn validate(&self) -> Result<(), ValidationErrors> {
+        T::validate(self).await
     }
 }
 
 macro_rules! impl_validate_list {
     ($container:ty) => {
-        impl<T: Validate<S> + Send + Sync, S: Send + Sync> Validate<S> for $container
+        impl<T: Validate + Send + Sync> Validate for $container
         where
             T: Send,
         {
-            async fn validate(&self, state: &S) -> Result<(), ValidationErrors> {
+            async fn validate(&self) -> Result<(), ValidationErrors> {
                 let mut vec_err: BTreeMap<usize, Box<ValidationErrors>> = BTreeMap::new();
 
                 for (index, item) in self.iter().enumerate() {
-                    if let Err(e) = item.validate(state).await {
+                    if let Err(e) = item.validate().await {
                         vec_err.insert(index, Box::new(e));
                     }
                 }
@@ -56,15 +56,15 @@ impl_validate_list!(std::collections::VecDeque<T>);
 impl_validate_list!(std::vec::Vec<T>);
 impl_validate_list!([T]);
 
-impl<T: Validate<S> + Send + Sync, S: Send + Sync, const N: usize> Validate<S> for [T; N]
+impl<T: Validate + Send + Sync, const N: usize> Validate for [T; N]
 where
     T: Send,
 {
-    async fn validate(&self, state: &S) -> Result<(), ValidationErrors> {
+    async fn validate(&self) -> Result<(), ValidationErrors> {
         let mut vec_err: BTreeMap<usize, Box<ValidationErrors>> = BTreeMap::new();
 
         for (index, item) in self.iter().enumerate() {
-            if let Err(e) = item.validate(state).await {
+            if let Err(e) = item.validate().await {
                 vec_err.insert(index, Box::new(e));
             }
         }
@@ -82,18 +82,17 @@ where
     }
 }
 
-impl<K, V, S, ST> Validate<ST> for HashMap<K, V, S>
+impl<K, V, S> Validate for HashMap<K, V, S>
 where
     K: Send + Sync,
-    V: Validate<ST> + Send + Sync,
+    V: Validate + Send + Sync,
     S: Send + Sync,
-    ST: Send + Sync,
 {
-    async fn validate(&self, state: &ST) -> Result<(), ValidationErrors> {
+    async fn validate(&self) -> Result<(), ValidationErrors> {
         let mut vec_err: BTreeMap<usize, Box<ValidationErrors>> = BTreeMap::new();
 
         for (index, (_key, value)) in self.iter().enumerate() {
-            if let Err(e) = value.validate(state).await {
+            if let Err(e) = value.validate().await {
                 vec_err.insert(index, Box::new(e));
             }
         }
@@ -109,17 +108,16 @@ where
     }
 }
 
-impl<K, V, S> Validate<S> for BTreeMap<K, V>
+impl<K, V> Validate for BTreeMap<K, V>
 where
     K: Send + Sync,
-    V: Validate<S> + Send + Sync,
-    S: Send + Sync,
+    V: Validate + Send + Sync,
 {
-    async fn validate(&self, state: &S) -> Result<(), ValidationErrors> {
+    async fn validate(&self) -> Result<(), ValidationErrors> {
         let mut vec_err: BTreeMap<usize, Box<ValidationErrors>> = BTreeMap::new();
 
         for (index, (_key, value)) in self.iter().enumerate() {
-            if let Err(e) = value.validate(state).await {
+            if let Err(e) = value.validate().await {
                 vec_err.insert(index, Box::new(e));
             }
         }
@@ -135,35 +133,32 @@ where
     }
 }
 
-/// This trait will be implemented by deriving `Validate`. This implementation can take one
-/// argument and pass this on to custom validators. The default `Args` type will be `()` if
-/// there is no custom validation with defined arguments.
-///
+/// A marker trait to associate a validated type with its context/state type.
+/// This is used by `ValidatedJson` to ensure the type can be extracted from
+/// axum requests with the correct state type.
+pub trait HasContext<T> {}
+
 /// The `Args` type can use the lifetime `'v_a` to pass references onto the validator.
 #[trait_variant::make(Send)]
-pub trait ValidateArgs<'v_a, S: Send + Sync> {
+pub trait ValidateArgs<'v_a> {
     type Args;
     fn validate_with_args(
         &self,
         args: Self::Args,
-        state: &S,
     ) -> impl Future<Output = Result<(), ValidationErrors>>;
 }
 
-impl<'v_a, T, U, S: Send + Sync> ValidateArgs<'v_a, S> for Option<T>
+impl<'v_a, T, U> ValidateArgs<'v_a> for Option<T>
 where
-    T: ValidateArgs<'v_a, S, Args = U> + Sync,
+    T: ValidateArgs<'v_a, Args = U>,
     U: Send,
+    T: Sync,
 {
     type Args = U;
 
-    async fn validate_with_args(
-        &self,
-        args: Self::Args,
-        state: &S,
-    ) -> Result<(), ValidationErrors> {
+    async fn validate_with_args(&self, args: Self::Args) -> Result<(), ValidationErrors> {
         if let Some(nested) = self {
-            T::validate_with_args(nested, args, state).await
+            T::validate_with_args(nested, args).await
         } else {
             Ok(())
         }
