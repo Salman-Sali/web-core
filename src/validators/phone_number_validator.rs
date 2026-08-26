@@ -1,7 +1,7 @@
-use validator_async::ValidationError;
+use web_core_validator::ValidationError;
 
 pub const INVALID_PHONE_NUMBER_MESSAGE: &str = "Invalid phone number.";
-pub async fn validate_phone(phone: &str) -> Result<(), ValidationError> {
+pub async fn validate_phone<S: Send + Sync>(phone: &str, _: S) -> Result<(), ValidationError> {
     match phonenumber::parse(None, phone) {
         Ok(number) if number.is_valid() => Ok(()),
         _ => {

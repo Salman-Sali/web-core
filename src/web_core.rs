@@ -82,7 +82,7 @@ where
     pub fn new(auth_service: AuthService, additional_state: T) -> Self {
         Self {
             auth_service: Arc::new(auth_service),
-            additional_state: additional_state,
+            additional_state,
         }
     }
 }

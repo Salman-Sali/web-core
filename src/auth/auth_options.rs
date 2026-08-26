@@ -42,8 +42,7 @@ impl AuthOptions {
                 purpose: _,
                 lifetime,
             } => *lifetime,
-        }
-        .clone();
+        };
         JwtClaims::new(
             self.audience.clone(),
             self.audience.clone(),

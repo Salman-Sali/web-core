@@ -83,8 +83,8 @@ where
     }
 }
 
-impl<T> Into<AuthenticatedUser> for JwtClaims<T> {
-    fn into(self) -> AuthenticatedUser {
-        AuthenticatedUser::new(self.sub.clone())
+impl<T> From<JwtClaims<T>> for AuthenticatedUser {
+    fn from(val: JwtClaims<T>) -> Self {
+        AuthenticatedUser::new(val.sub.clone())
     }
 }

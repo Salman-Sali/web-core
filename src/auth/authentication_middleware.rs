@@ -29,11 +29,11 @@ pub async fn authentication_middleware(
 ) -> Result<Response, StatusCode> {
     let auth_service = auth_service.clone();
     let claims: JwtClaims<()> = auth_service
-        .decode_token::<_>(&bearer.token().to_string(), TokenPurpose::Access)
+        .decode_token::<_>(bearer.token(), TokenPurpose::Access)
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     req.extensions_mut()
-        .insert(claims.additional_claims.clone());
+        .insert(claims.additional_claims);
     let authenticated_user: AuthenticatedUser = claims.into();
     req.extensions_mut().insert(authenticated_user);
 

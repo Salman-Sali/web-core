@@ -50,14 +50,14 @@ impl AuthService {
         validation.leeway = 0;
 
         if let Some(audience) = &self.auth_options.audience {
-            validation.set_audience(&[audience.to_string()]);
+            validation.set_audience(std::slice::from_ref(audience));
         }
         match decode::<JwtClaims<T>>(token, &self.auth_options.decoding_key, &validation) {
             Ok(x) => {
                 if x.claims.purpose != purpose.to_string() {
                     return Err(unauthorized!("Token purpose does not match."));
                 }
-                return Ok(x.claims);
+                Ok(x.claims)
             }
             Err(e) => Err(unauthorized!("Error while decoding token : {e}")),
         }
@@ -92,7 +92,7 @@ fn generate_encoded_claims(
         ]
         .join(",");
     }
-    return Ok(json);
+    Ok(json)
 }
 
 fn b64_encode_part<T: Serialize>(input: &T) -> Result<String, Error> {

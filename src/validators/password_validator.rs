@@ -21,7 +21,7 @@ impl PasswordValidator {
         for c in password.chars() {
             has_lower |= c.is_lowercase();
             has_upper |= c.is_uppercase();
-            has_digit |= c.is_digit(10);
+            has_digit |= c.is_ascii_digit();
             has_special_symbols |= SPECIAL_SYMBOLS.contains(&c);
         }
 

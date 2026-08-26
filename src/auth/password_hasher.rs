@@ -11,10 +11,10 @@ pub fn hash_password(password: &str) -> Result<String, Error> {
         .try_into()
         .map_err(|e| something_went_wrong!("Error while creating salt for password hash : {e}"))?;
 
-    return argon2
+    argon2
         .hash_password(password.as_bytes(), salt)
         .map(|x| x.to_string())
-        .map_err(|e| something_went_wrong!("Error while hashing password : {e}"));
+        .map_err(|e| something_went_wrong!("Error while hashing password : {e}"))
 }
 
 pub fn verify_password(password: String, hash: String) -> Result<bool, Error> {
@@ -24,7 +24,7 @@ pub fn verify_password(password: String, hash: String) -> Result<bool, Error> {
     let verify_password_result = argon2
         .verify_password(password.as_bytes(), &hash)
         .map_or_else(|_| false, |_| true);
-    return Ok(verify_password_result);
+    Ok(verify_password_result)
 }
 
 pub trait PasswordHandler {
@@ -44,7 +44,7 @@ where
     fn update_password(&mut self, password: &str) -> Result<(), Error> {
         let hashed_password = hash_password(password)?;
         self.set_password_hash(hashed_password);
-        return Ok(());
+        Ok(())
     }
 
     fn validate_password(&self, password: String) -> Result<bool, Error> {

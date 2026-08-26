@@ -53,5 +53,5 @@ pub fn generate_cors(frontend_urls: Vec<String>) -> CorsLayer {
         use tower_http::cors::Any;
         cors = cors.allow_origin(Any).allow_credentials(false);
     }
-    return cors;
+    cors
 }

@@ -10,7 +10,7 @@ pub async fn verify_google_token(client_id: String, id_token: String) -> Result<
         .map_err(|e| something_went_wrong!("Error while validating google id token : {e:?}"))?;
 
     if payload.aud != client_id || payload.email_verified != Some(true) {
-        return Err(something_went_wrong!("Invlalid token"))?;
+        Err(something_went_wrong!("Invlalid token"))?;
     }
 
     let email = payload

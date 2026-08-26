@@ -26,14 +26,12 @@ where
             let key = key.clone();
             let value = value.clone();
             async move {
-                if let Some(header_value) = request.headers().get(&key) {
-                    if let Ok(header_value) = header_value.to_str() {
-                        if header_value == value {
+                if let Some(header_value) = request.headers().get(&key)
+                    && let Ok(header_value) = header_value.to_str()
+                        && header_value == value {
                             return next.run(request).await;
                         }
-                    }
-                }
-                return StatusCode::FORBIDDEN.into_response();
+                StatusCode::FORBIDDEN.into_response()
             }
         })
     }

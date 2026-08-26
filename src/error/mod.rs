@@ -16,7 +16,7 @@ use bad_request::BadRequestError;
 use field_validation::FieldValidationErrors;
 use not_found::NotFoundError;
 use something_went_wrong::SomethingWentWrong;
-use validator_async::{ValidationError, ValidationErrors};
+use web_core_validator::{ValidationError, ValidationErrors};
 
 #[derive(Debug)]
 pub enum Error {
@@ -115,13 +115,13 @@ impl From<askama::Error> for Error {
 #[cfg(feature = "diesel")]
 impl From<diesel::r2d2::PoolError> for Error {
     fn from(value: diesel::r2d2::PoolError) -> Self {
-        Error::new_something_went_wrong(format!("{} {:?}", value.to_string(), value))
+        Error::new_something_went_wrong(format!("{} {:?}", value, value))
     }
 }
 
 #[cfg(feature = "diesel")]
 impl From<diesel::result::Error> for Error {
     fn from(value: diesel::result::Error) -> Self {
-        Error::new_something_went_wrong(format!("{} {:?}", value.to_string(), value))
+        Error::new_something_went_wrong(format!("{} {:?}", value, value))
     }
 }

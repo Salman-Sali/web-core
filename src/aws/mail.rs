@@ -51,5 +51,5 @@ pub async fn send_html_mail(
         .await
         .map_err(|e| something_went_wrong!("Error while sending email {e:?}"))?;
 
-    return Ok(());
+    Ok(())
 }

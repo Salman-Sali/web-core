@@ -1,0 +1,18 @@
+[package]
+name = "web-core-validator-derive"
+version = "0.2.0"
+homepage = "https://github.com/Keats/validator"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2"
+quote = "1"
+proc-macro2 = "1"
+proc-macro-error2 = "2"
+darling = { version = "0.20", features = ["suggestions"] }
+
+[features]
+nightly_features = ["proc-macro-error2/nightly"]

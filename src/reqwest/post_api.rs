@@ -16,7 +16,7 @@ where
         }
     };
 
-    println!("Api call begin : {:?}", &api_url);
+    println!("Api call begin : {:?}", api_url);
 
     let client = Client::new();
     let response = client
@@ -41,11 +41,11 @@ where
         return Err(());
     }
 
-    return match response.json().await {
+    match response.json().await {
         Ok(x) => Ok(x),
         Err(e) => {
             eprintln!("Error while deserialising api resonse : {}", e);
             Err(())
         },
-    };
+    }
 }

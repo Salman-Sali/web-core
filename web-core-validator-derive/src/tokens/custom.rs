@@ -1,0 +1,39 @@
+use quote::quote;
+
+use crate::types::Custom;
+use crate::utils::quote_message;
+
+pub fn custom_tokens(
+    custom: Custom,
+    field_name: &proc_macro2::TokenStream,
+    field_name_str: &str,
+) -> proc_macro2::TokenStream {
+    let fn_call = custom.function.unwrap();
+
+    let args = match custom.use_context {
+        Some(true) => quote!(#field_name, args, state),
+        _ => quote!(#field_name, state),
+    };
+
+    let message = quote_message(custom.message);
+
+    let code = if let Some(c) = custom.code {
+        quote!(
+            err.code = ::std::borrow::Cow::from(#c);
+        )
+    } else {
+        quote!()
+    };
+
+    quote! {
+        match #fn_call(#args).await {
+            ::std::result::Result::Ok(()) => {}
+            ::std::result::Result::Err(mut err) => {
+                #code
+                #message
+                err.add_param(::std::borrow::Cow::from("value"), &#field_name);
+                errors.add(#field_name_str, err);
+            }
+        }
+    }
+}
