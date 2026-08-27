@@ -33,6 +33,16 @@ impl ValidationError {
     }
 }
 
+impl From<(&str, &str)> for ValidationError {
+    fn from((code, message): (&str, &str)) -> Self {
+        ValidationError {
+            code: Cow::Owned(code.to_owned()),
+            message: Some(Cow::Owned(message.to_owned())),
+            params: HashMap::new(),
+        }
+    }
+}
+
 impl std::error::Error for ValidationError {
     fn description(&self) -> &str {
         &self.code

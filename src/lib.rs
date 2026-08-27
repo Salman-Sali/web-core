@@ -11,9 +11,12 @@ pub mod web_core;
 
 #[cfg(feature = "aws")]
 pub mod aws;
+pub mod axum;
 pub mod diesel;
 
 pub use serde_json;
 
 #[cfg(feature = "diesel")]
 pub use web_core_derive::diesel_jsonb;
+
+pub use validators::validator_context::ValidatorContext;

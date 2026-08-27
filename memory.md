@@ -42,3 +42,4 @@
 - Added `S: Send + Sync` state parameter to `Validate` trait and all implementations (`macro_rules! impl_validate_list`, `[T; N]`, `HashMap`, `BTreeMap`)
 - Updated `ValidateArgs` trait to also take `state: &S` parameter
 - Updated derive macro to generate `Validate<S>` and `ValidateArgs<'v_a, S>` implementations with state forwarding to nested validations
+- Added `From<(&str, &str)>` implementation for `ValidationError` to easily create errors with code and message
