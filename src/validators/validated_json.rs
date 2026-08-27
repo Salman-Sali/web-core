@@ -4,7 +4,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use http::request::Parts;
 use serde::de::DeserializeOwned;
 use web_core_validator::{HasContext, Validate, ValidateArgs};
 
