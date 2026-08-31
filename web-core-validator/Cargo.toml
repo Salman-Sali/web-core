@@ -1,6 +1,6 @@
 [package]
 name = "web-core-validator"
-version = "0.2.0"
+version = "0.2.1"
 homepage = "https://github.com/Keats/validator"
 edition = "2024"
 
