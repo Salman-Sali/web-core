@@ -4026,7 +4026,7 @@ dependencies = [
 
 [[package]]
 name = "web-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "argon2",
  "askama",
@@ -4063,7 +4063,7 @@ dependencies = [
 
 [[package]]
 name = "web-core-derive"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4073,7 +4073,7 @@ dependencies = [
 
 [[package]]
 name = "web-core-validator"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "card-validate",
  "idna",
@@ -4090,7 +4090,7 @@ dependencies = [
 
 [[package]]
 name = "web-core-validator-derive"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "darling 0.20.11",
  "proc-macro-error2",

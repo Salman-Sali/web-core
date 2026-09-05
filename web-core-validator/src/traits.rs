@@ -144,7 +144,7 @@ pub trait ValidateArgs<'v_a> {
     type Args;
     fn validate_with_args(
         &self,
-        args: Self::Args,
+        args: &mut Self::Args,
     ) -> impl Future<Output = Result<(), ValidationErrors>>;
 }
 
@@ -156,7 +156,7 @@ where
 {
     type Args = U;
 
-    async fn validate_with_args(&self, args: Self::Args) -> Result<(), ValidationErrors> {
+    async fn validate_with_args(&self, args: &mut Self::Args) -> Result<(), ValidationErrors> {
         if let Some(nested) = self {
             T::validate_with_args(nested, args).await
         } else {

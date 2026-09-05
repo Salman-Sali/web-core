@@ -66,14 +66,21 @@ pub struct ValidateField {
     #[darling(multiple)]
     pub custom: Vec<Custom>,
     pub skip: Option<bool>,
-    pub nested: Option<bool>,
+    /// Nested validation - supports both `nested` and `nested(use_context)`
+    pub nested: Option<Nested>,
     /// Placeholder for the crate name, filled in by the [`ValidationData`](crate::ValidationData) value.
     #[darling(skip)]
     pub crate_name: CrateName,
 }
 
 impl ValidateField {
-    pub fn validate(&self, struct_ident: &Ident, all_fields: &[&Field], current_field: &Field) {
+    pub fn validate(
+        &self,
+        struct_ident: &Ident,
+        all_fields: &[&Field],
+        current_field: &Field,
+        parent_has_context: bool,
+    ) {
         let field_name = self
             .ident
             .clone()
@@ -86,6 +93,17 @@ impl ValidateField {
                     current_field.span(), "You need to set at least one validator on field `{}`", field_name;
                     note = "If you want nested validation, use `#[validate(nested)]`"
                 )
+            }
+        }
+
+        // Check if nested(use_context) is used without parent context
+        if let Some(nested) = &self.nested {
+            if nested.use_context() && !parent_has_context {
+                abort!(
+                    current_field.span(), "Invalid attribute #[validate(nested(use_context))] on field `{}`:", field_name;
+                    note = "Cannot use `nested(use_context)` when the struct has no `#[validate(context = ...)]` attribute";
+                    help = "Add `#[validate(context = YourContextType)]` to the struct, or remove `use_context` from the nested field"
+                );
             }
         }
 
@@ -181,6 +199,38 @@ impl ValidateField {
         }
 
         find_option(0, &self.ty)
+    }
+
+    /// Returns true if this field's type is wrapped in Option
+    pub fn is_option(&self) -> bool {
+        self.number_options() > 0
+    }
+
+    /// Returns true if this field's type is a Vec
+    pub fn is_vec(&self) -> bool {
+        fn is_vec_type(ty: &syn::Type) -> bool {
+            if let syn::Type::Path(p) = ty {
+                let idents_of_path = p.path.segments.iter().fold(String::new(), |mut acc, v| {
+                    acc.push_str(&v.ident.to_string());
+                    acc.push('|');
+                    acc
+                });
+                // Check for Vec| (just Vec) or |Vec| (path segments)
+                if idents_of_path.contains("Vec|") {
+                    return true;
+                }
+                // Also check for fully qualified paths
+                if idents_of_path.starts_with("std|collections|vec|Vec|")
+                    || idents_of_path.starts_with("collections|vec|Vec|")
+                    || idents_of_path == "Vec|"
+                {
+                    return true;
+                }
+            }
+            false
+        }
+
+        is_vec_type(&self.ty)
     }
 
     pub fn if_let_option_wrapper(
@@ -340,4 +390,90 @@ pub struct Schema {
     pub skip_on_field_errors: Option<bool>,
     pub message: Option<String>,
     pub code: Option<String>,
+}
+
+/// Configuration for nested validation
+/// Supports both `nested` and `nested(use_context)` syntaxes
+#[derive(Debug, Clone, Default)]
+pub struct Nested {
+    pub use_context: Option<bool>,
+}
+
+impl Nested {
+    /// Returns true if this nested validation should use context
+    pub fn use_context(&self) -> bool {
+        self.use_context.unwrap_or(false)
+    }
+}
+
+impl FromMeta for Nested {
+    fn from_none() -> Option<Self> {
+        None
+    }
+
+    fn from_word() -> darling::Result<Self> {
+        // Handle just `nested` as a flag (empty attribute)
+        Ok(Nested { use_context: None })
+    }
+
+    fn from_bool(value: bool) -> darling::Result<Self> {
+        // Handle `nested = true` or `nested = false`
+        if value {
+            Ok(Nested { use_context: None })
+        } else {
+            Err(darling::Error::custom(
+                "`nested = false` is not supported, remove the attribute instead",
+            ))
+        }
+    }
+
+    fn from_list(items: &[darling::ast::NestedMeta]) -> darling::Result<Self> {
+        // Handle `nested(use_context)` or `nested(use_context = true)`
+        let mut use_context: Option<bool> = None;
+
+        for item in items {
+            match item {
+                darling::ast::NestedMeta::Meta(syn::Meta::Path(path)) => {
+                    if let Some(ident) = path.get_ident() {
+                        if ident == "use_context" {
+                            use_context = Some(true);
+                        } else {
+                            return Err(darling::Error::custom(format!(
+                                "unknown nested attribute: {}",
+                                ident
+                            )));
+                        }
+                    }
+                }
+                darling::ast::NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
+                    if let Some(ident) = nv.path.get_ident() {
+                        if ident == "use_context" {
+                            if let syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Bool(b),
+                                ..
+                            }) = &nv.value
+                            {
+                                use_context = Some(b.value);
+                            } else {
+                                return Err(darling::Error::custom(
+                                    "use_context must be a boolean",
+                                )
+                                .with_span(&nv.value));
+                            }
+                        } else {
+                            return Err(darling::Error::custom(format!(
+                                "unknown nested attribute: {}",
+                                ident
+                            )));
+                        }
+                    }
+                }
+                _ => {
+                    return Err(darling::Error::custom("unexpected nested attribute format"));
+                }
+            }
+        }
+
+        Ok(Nested { use_context })
+    }
 }

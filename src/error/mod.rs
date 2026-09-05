@@ -16,7 +16,9 @@ use bad_request::BadRequestError;
 use field_validation::FieldValidationErrors;
 use not_found::NotFoundError;
 use something_went_wrong::SomethingWentWrong;
-use web_core_validator::{ValidationError, ValidationErrors};
+use web_core_validator::ValidationErrors;
+
+use crate::error::field_validation::{FieldErrorKind, FieldErrors};
 
 #[derive(Debug)]
 pub enum Error {
@@ -35,9 +37,11 @@ impl Error {
     }
 
     pub fn new_field_validation_error(field: &str, error: &str) -> Error {
-        let mut hash_map = HashMap::new();
-        hash_map.insert(field.into(), error.into());
-        let field_validation_errors = FieldValidationErrors { fields: hash_map };
+        let mut fields = HashMap::new();
+        fields.insert(field.into(), FieldErrorKind::Message(error.into()));
+        let field_validation_errors = FieldValidationErrors {
+            fields: FieldErrors(fields),
+        };
         Error::FieldValidationError(field_validation_errors)
     }
 
@@ -82,27 +86,7 @@ impl IntoResponse for Error {
 
 impl From<ValidationErrors> for Error {
     fn from(err: ValidationErrors) -> Self {
-        let mut fields: HashMap<String, String> = HashMap::new();
-        for error in err.field_errors() {
-            let field = error.0.to_string();
-            let errors: Vec<String> = error.1.iter().map(|x| x.to_string()).collect();
-            if field == "__all__" {
-                return Error::BadRequestError(BadRequestError::new(errors.join(" ")));
-            }
-            fields.insert(field, errors.join(" "));
-        }
-        Error::FieldValidationError(FieldValidationErrors { fields })
-    }
-}
-
-impl From<ValidationError> for Error {
-    fn from(err: ValidationError) -> Self {
-        let mut fields: HashMap<String, String> = HashMap::new();
-        if err.code == "__all__" {
-            return Error::BadRequestError(BadRequestError::new(err.message.unwrap().to_string()));
-        }
-        fields.insert(err.code.to_string(), err.message.unwrap().to_string());
-        Error::FieldValidationError(FieldValidationErrors { fields })
+        Error::FieldValidationError(FieldValidationErrors { fields: err.into() })
     }
 }
 

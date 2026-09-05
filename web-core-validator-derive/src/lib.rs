@@ -224,12 +224,14 @@ impl ToTokens for ValidateField {
             custom = wrapper_closure(custom);
         }
 
-        let nested = if let Some(n) = self.nested {
-            if n {
-                wrapper_closure(nested_tokens(&actual_field, &field_name_str))
-            } else {
-                quote!()
-            }
+        let nested = if let Some(n) = &self.nested {
+            wrapper_closure(nested_tokens(
+                &actual_field,
+                &field_name_str,
+                n.use_context(),
+                self.is_option(),
+                self.is_vec(),
+            ))
         } else {
             quote!()
         };
@@ -265,7 +267,6 @@ struct ValidationData {
     #[darling(multiple)]
     schema: Vec<Schema>,
     context: Option<Path>,
-    mutable: Option<bool>,
     nest_all_fields: Option<bool>,
     /// The name of the crate to use for the generated code,
     /// defaults to `validator`.
@@ -297,8 +298,12 @@ impl ValidationData {
         if let Data::Struct(fields) = &self.data {
             let original_fields: Vec<&Field> = fields.fields.iter().map(|f| &f.original).collect();
             for f in &fields.fields {
-                f.parsed
-                    .validate(&self.ident, &original_fields, &f.original);
+                f.parsed.validate(
+                    &self.ident,
+                    &original_fields,
+                    &f.original,
+                    self.context.is_some(),
+                );
             }
         }
 
@@ -320,15 +325,7 @@ pub fn derive_validation(input: proc_macro::TokenStream) -> proc_macro::TokenStr
     let crate_name = validation_data.crate_name;
 
     let custom_context = if let Some(context) = &validation_data.context {
-        if let Some(mutable) = validation_data.mutable {
-            if mutable {
-                quote!(&'v_a mut #context)
-            } else {
-                quote!(&'v_a #context)
-            }
-        } else {
-            quote!(&'v_a #context)
-        }
+        quote!(#context)
     } else {
         quote!(())
     };
@@ -354,7 +351,7 @@ pub fn derive_validation(input: proc_macro::TokenStream) -> proc_macro::TokenStr
             validation_fields = validation_fields
                 .iter_mut()
                 .map(|f| {
-                    f.nested = Some(true);
+                    f.nested = Some(Nested { use_context: None });
                     f.to_owned()
                 })
                 .collect();
@@ -410,7 +407,7 @@ pub fn derive_validation(input: proc_macro::TokenStream) -> proc_macro::TokenStr
             impl #imp #crate_name::Validate for #ident #ty #whr {
                 async fn validate(&self) -> ::std::result::Result<(), #crate_name::ValidationErrors> {
                     use #crate_name::ValidateArgs;
-                    self.validate_with_args(()).await
+                    self.validate_with_args(&mut ()).await
                 }
             }
         }
@@ -435,7 +432,7 @@ pub fn derive_validation(input: proc_macro::TokenStream) -> proc_macro::TokenStr
         impl #imp_args #crate_name::ValidateArgs<'v_a> for #ident #ty #whr {
             type Args = #custom_context;
 
-            async fn validate_with_args(&self, args: Self::Args)
+            async fn validate_with_args(&self, args: &mut Self::Args)
             -> ::std::result::Result<(), #crate_name::ValidationErrors>
              {
                 #use_statements

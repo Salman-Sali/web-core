@@ -40,6 +40,18 @@
 - Fixed `mismatched_lifetime_syntaxes` warnings in `email.rs`, `regex.rs`, and `urls.rs`
 - Changed `Cow<str>` to `Cow<'_, str>` and `Cow<Regex>` to `Cow<'_, Regex>` for consistency with Rust's elided lifetime syntax rules
 - Added `S: Send + Sync` state parameter to `Validate` trait and all implementations (`macro_rules! impl_validate_list`, `[T; N]`, `HashMap`, `BTreeMap`)
-- Updated `ValidateArgs` trait to also take `state: &S` parameter
-- Updated derive macro to generate `Validate<S>` and `ValidateArgs<'v_a, S>` implementations with state forwarding to nested validations
+- Updated `ValidateArgs` trait to take `args: &mut Self::Args` instead of `args: Self::Args`
+- Updated derive macro to generate `Validate` and `ValidateArgs<'v_a>` implementations with mutable context forwarding to nested validations
+- Removed `mutable` attribute from derive macro - context is now always mutable
+- Fixed derive macro to generate `type Args = Context` instead of `type Args = &'v_a mut Context` - the associated type should be the bare type without reference since the function parameter is `&mut Self::Args`
 - Added `From<(&str, &str)>` implementation for `ValidationError` to easily create errors with code and message
+- Added `nested(use_context)` support to the validator derive macro - allows propagating parent context to nested struct validations via `validate_with_args`
+  - New syntax: `#[validate(nested(use_context))]` on fields where the nested struct implements `ValidateArgs`
+  - Works with `Option<T>` and `Vec<T>` nested types
+  - Produces clear compile-time error if used without parent `#[validate(context = ...)]`
+  - Added `is_option()` and `is_vec()` helper methods to `ValidateField`
+  - Added custom `FromMeta` implementation for `Nested` struct to support both `#[validate(nested)]` and `#[validate(nested(use_context))]` syntaxes
+
+## Error Handling Notes
+- `FieldErrors` is a tuple struct wrapping `HashMap<String, FieldError>`
+- Custom `Serialize` impl for `FieldErrors` forwards to inner HashMap to avoid extra nesting in serialized output

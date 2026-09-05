@@ -10,6 +10,7 @@ pub struct ValidationError {
     pub code: Cow<'static, str>,
     pub message: Option<Cow<'static, str>>,
     pub params: HashMap<Cow<'static, str>, Value>,
+    pub list_error: Option<Vec<Option<String>>>,
 }
 
 impl ValidationError {
@@ -18,6 +19,7 @@ impl ValidationError {
             code: Cow::from(code),
             message: None,
             params: HashMap::new(),
+            list_error: None,
         }
     }
 
@@ -33,12 +35,24 @@ impl ValidationError {
     }
 }
 
+impl From<(&str, Vec<Option<&str>>)> for ValidationError {
+    fn from(value: (&str, Vec<Option<&str>>)) -> Self {
+        ValidationError {
+            code: Cow::Owned(value.0.to_owned()),
+            message: None,
+            params: HashMap::new(),
+            list_error: Some(value.1.iter().map(|x| x.map(|x| x.to_string())).collect()),
+        }
+    }
+}
+
 impl From<(&str, &str)> for ValidationError {
     fn from((code, message): (&str, &str)) -> Self {
         ValidationError {
             code: Cow::Owned(code.to_owned()),
             message: Some(Cow::Owned(message.to_owned())),
             params: HashMap::new(),
+            list_error: None,
         }
     }
 }

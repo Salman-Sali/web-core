@@ -37,7 +37,7 @@ pub struct ValidatedJsonWithCtx<T>(pub T);
 impl<S, T> FromRequest<S> for ValidatedJsonWithCtx<T>
 where
     T: DeserializeOwned
-        + for<'v_a> ValidateArgs<'v_a, Args = &'v_a ValidatorContext<S>>
+        + for<'v_a> ValidateArgs<'v_a, Args = ValidatorContext<S>>
         + Send
         + HasContext<ValidatorContext<S>>
         + 'static,
@@ -54,9 +54,9 @@ where
         let value: T = serde_json::from_slice(&bytes)
             .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()).into_response())?;
 
-        let context = (parts, state.clone());
+        let mut context = ValidatorContext::from((parts, state.clone()));
         value
-            .validate_with_args(&ValidatorContext::from(context))
+            .validate_with_args(&mut context)
             .await
             .map_err(|e| Error::from(e).into_response())?;
 
