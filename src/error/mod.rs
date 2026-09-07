@@ -20,7 +20,7 @@ use web_core_validator::ValidationErrors;
 
 use crate::error::field_validation::{FieldErrorKind, FieldErrors};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Error {
     FieldValidationError(FieldValidationErrors),
     BadRequestError(BadRequestError),

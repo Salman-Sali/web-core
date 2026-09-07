@@ -3,12 +3,12 @@ use std::collections::{BTreeMap, HashMap};
 use serde::ser::SerializeStruct;
 use web_core_validator::{ValidationError, ValidationErrors, ValidationErrorsKind};
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct FieldValidationErrors {
     pub fields: FieldErrors,
 }
 
-#[derive(Debug, serde::Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Deserialize, PartialEq, Eq)]
 pub struct FieldErrors(pub HashMap<String, FieldErrorKind>);
 
 impl serde::Serialize for FieldErrors {
@@ -32,7 +32,7 @@ impl serde::Serialize for FieldValidationErrors {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum FieldErrorKind {
     Message(String),

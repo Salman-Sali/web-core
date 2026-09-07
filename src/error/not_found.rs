@@ -1,17 +1,14 @@
-use axum::{response::IntoResponse, Json};
+use axum::{Json, response::IntoResponse};
 use http::StatusCode;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NotFoundError {
-    pub error: String
+    pub error: String,
 }
 
 impl IntoResponse for NotFoundError {
     fn into_response(self) -> axum::response::Response {
-        (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!(self))
-        ).into_response()
+        (StatusCode::NOT_FOUND, Json(serde_json::json!(self))).into_response()
     }
 }
 

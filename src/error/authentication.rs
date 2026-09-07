@@ -2,7 +2,7 @@ use axum::{Json, response::IntoResponse};
 use http::StatusCode;
 use serde::ser::SerializeStruct;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct AuthenticationError {
     pub error_details: String,
 }
