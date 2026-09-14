@@ -24,12 +24,20 @@
 | `src/auth/` | JWT, password hashing, Google OAuth |
 | `src/error/` | Error types and IntoResponse impls |
 | `src/web_core.rs` | WebCoreState, WebCoreOptions, router extensions |
-| `src/validators/` | Password, phone, validated_json extractors |
+| `src/validators/` | Password, phone, validated_json extractors, validator context |
 | `src/test/` | Router testing utilities |
 | `src/macros.rs` | Error macros (bad_request!, unauthorized!, etc) |
+| `src/pagination/` | Pagination utilities |
+| `src/axum/` | Axum-specific utilities |
+| `src/reqwest/` | Reqwest client helpers |
 | `web-core-derive/` | Procedural macros (diesel_jsonb) |
-| `web-core-validator/` | Validation traits and implementations |
+| `web-core-validator/` | Validation traits and implementations (state-aware) |
 | `web-core-validator-derive/` | Procedural macros for derive(Validate) |
+
+## Documentation
+| File | Description |
+|------|-------------|
+| `README.md` | Main crate documentation with examples and module overview |
 
 ## User Preferences
 - Do not fix errors unless explicitly asked

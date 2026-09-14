@@ -1,29 +1,44 @@
 # web-core
 
-Core utilities for building web applications with Axum. Provides authentication, authorization, CORS, error handling, testing helpers, and more.
+A Rust crate providing core utilities for building web applications with Axum. Features JWT authentication, password hashing, structured error handling, request validation, CORS, testing helpers, and more.
+
+## Overview
+
+`web-core` consolidates common web backend patterns into a cohesive toolkit, reducing boilerplate when building Axum-based APIs. It emphasizes trait-based extensibility, uniform error responses, and state-aware validation.
 
 ## Installation
 
 ```toml
 [dependencies]
-web-core = { git = "https://github.com/Salman-Sali/web-core.git", tag = "0.1.19" }
+web-core = { version = "0.3.0", features = ["derive"] }
 
 [features]
 # Enables CORS allow-all for local development
 local = ["web-core/local"]
 
 [dev-dependencies]
-web-core = { git = "https://github.com/Salman-Sali/web-core.git", tag = "0.1.19", features = ["test_mode"] }
+web-core = { version = "0.3.0", features = ["all"] }
 ```
+
+### Crate Structure
+
+This workspace contains four crates:
+
+| Crate | Description |
+|-------|-------------|
+| `web-core` | Main crate with auth, error handling, validation, and utilities |
+| `web-core-derive` | Procedural macros (e.g., `diesel_jsonb`) |
+| `web-core-validator` | Validation traits and implementations (fork of Keats/validator) |
+| `web-core-validator-derive` | Procedural macros for `derive(Validate)` |
 
 ### Optional Features
 
 | Feature | Description |
 |---------|-------------|
-| `aws` | AWS SES email sending and CloudFront utilities |
+| `aws` | AWS SES email sending |
 | `diesel` | Diesel ORM integration with JSONB support |
-| `derive` | Procedural macros for derive traits |
-| `all` | Enables all features |
+| `derive` | Procedural macros (includes `diesel_jsonb`) |
+| `all` | Enables all features (`aws`, `derive`, `diesel`) |
 
 ## Quick Start
 
@@ -89,30 +104,43 @@ async fn create_post(
 
 ### Authentication & Authorization
 
-The crate provides JWT-based authentication with HS512 signing:
+JWT-based authentication with configurable token lifetimes and audience:
 
 ```rust
 use web_core::auth::{
     AuthOptions, AuthService, TokenOptions, TokenPurpose,
-    AuthHandler, AuthHandlerExtensions, password_hasher::PasswordHandlerExtensions
+    AuthHandler, AuthHandlerExtensions
 };
 
-// Generate tokens for a user
+// Initialize auth service
+let auth_options = AuthOptions::new(
+    secret_key,
+    Duration::from_secs(3600),      // Access token TTL
+    Duration::from_secs(2592000)    // Refresh token TTL
+);
+let auth_service = AuthService::new(auth_options);
+
+// Generate tokens
 let tokens = auth_service.generate_tokens("user_id")?;
 
-// Or use the trait extensions
-let tokens = user.generate_tokens(auth_service)?;
+// Or using trait extensions
+let tokens = user.generate_tokens(&auth_service)?;
 
-// Custom token with additional claims
+// Custom claims
 let token = auth_service.generate_token(
     TokenOptions::new("user_id", TokenPurpose::Access)
         .with_additional_claims(MyClaims { role: "admin".into() })?
 )?;
+
+// Middleware layer
+let protected = Router::new()
+    .route("/admin", get(admin_handler))
+    .with_auth_layer(auth_service);
 ```
 
 ### Password Hashing
 
-Argon2-based password hashing with trait extensions:
+Argon2-based password hashing with trait-based extensions:
 
 ```rust
 use web_core::auth::password_hasher::{PasswordHandler, PasswordHandlerExtensions};
@@ -132,12 +160,12 @@ impl PasswordHandler for User {
     }
 }
 
-// Update password
-user.update_password("new_password")?;
+// Hash and set password
+user.update_password("new_secure_password")?;
 
 // Validate password
-if user.validate_password("password".into())? {
-    // Password is valid
+if user.validate_password("input_password")? {
+    // Authenticated
 }
 ```
 
@@ -149,82 +177,152 @@ use web_core::auth::google::verify_google_token;
 let email = verify_google_token(client_id, id_token).await?;
 ```
 
-### Ed25519 Signing
+### Request Validation
+
+State-aware validation using `ValidatedJson`:
 
 ```rust
-use web_core::utils::signatory;
+use web_core::validators::validated_json::ValidatedJson;
+use web_core::validators::validator_context::ValidatorContext;
+use web_core_validator::Validate;
 
-// Sign data
-let signature = signatory::sign(&signing_key_hex, "data to sign")?;
+#[derive(Deserialize, Validate)]
+struct CreateUserRequest {
+    #[validate(email)]
+    email: String,
+    #[validate(length(min = 8))]
+    password: String,
+}
 
-// Verify signature
-signatory::verify(&verifying_key_hex, "data to sign", &signature)?;
+async fn create_user(
+    State(state): State<AppState>,
+    ValidatedJson(body, _ctx): ValidatedJson<CreateUserRequest>,
+) -> Result<Json<User>, Error> {
+    // Validation passed, body.email and body.password are valid
+    Ok(Json(create_in_db(&state.db, body).await?))
+}
 ```
+
+Validation with context:
+
+```rust
+#[derive(Deserialize, Validate)]
+#[validate(context = ValidatorContext<AppState>)]
+struct UpdateProfileRequest {
+    #[validate(nested(use_context))]
+    profile: ProfileData,
+}
+
+#[derive(Deserialize, Validate)]
+struct ProfileData {
+    #[validate(custom(function = "check_unique_username"))]
+    username: String,
+}
+
+// Custom validation function with access to state and request parts
+fn check_unique_username(
+    username: &str,
+    ctx: &mut ValidatorContext<AppState>
+) -> Result<(), ValidationError> {
+    // Access application state
+    let db = ctx.state().db.clone();
+
+    // Access request parts (headers, extensions, etc.)
+    let parts = ctx.parts();
+    let request_id = parts.headers.get("x-request-id");
+
+    // Extract path parameters
+    let user_id: String = futures::executor::block_on(ctx.get_path_value())?;
+
+    // Use memoization for expensive lookups
+    if let Some(cached) = ctx.get::<bool>("username_checked") {
+        return Ok(());
+    }
+
+    // Perform unique check
+    let is_unique = check_db(&db, username)?;
+    ctx.insert("username_checked", is_unique);
+
+    Ok(())
+}
+```
+
+The `ValidatorContext<S>` provides:
+- `.state()` → reference to your application state
+- `.parts()` → reference to HTTP request parts (headers, method, uri, extensions)
+- `.get_path_value<T>()` → extract and deserialize path parameters
+- `.from_request_parts::<T>()` → extract any `FromRequestParts` type (e.g., `TypedHeader`)
+- `.insert(key, value)` / `.get(key)` / `.pop(key)` → memoization for expensive operations
 
 ### Error Handling
 
-Structured error types with automatic conversion:
+Structured errors with automatic `IntoResponse`:
 
 ```rust
 use web_core::{
     error::Error,
-    bad_request, unauthorized, not_found, something_went_wrong
+    bad_request, unauthorized, not_found, forbidden, something_went_wrong
 };
 
-// Return errors from handlers
 fn my_handler() -> Result<(), Error> {
-    // Bad request with field validation
-    return Err(bad_request!("Invalid email", {"email": "malformed"}));
+    // Field validation errors
+    Err(bad_request!("Invalid email", {"email": "not a valid email"}))
 
-    // Simple bad request
-    return Err(bad_request!("Something went wrong"));
+    // Simple messages
+    Err(bad_request!("Missing required field"))
+    Err(unauthorized!("Token expired or invalid"))
+    Err(forbidden!("Insufficient permissions"))
+    Err(not_found!("User not found"))
 
-    // Unauthorized
-    return Err(unauthorized!("Token expired"));
-
-    // Not found
-    return Err(not_found!("User not found"));
-
-    // Internal error (logged but generic message to client)
-    return Err(something_went_wrong!("Database connection failed: {}", err));
+    // Internal error (details logged, generic message to client)
+    Err(something_went_wrong!("DB connection failed: {}", err))
 }
 ```
 
+Error types automatically serialize to appropriate HTTP responses with consistent JSON structure.
+
+### CORS Configuration
+
+```rust
+use web_core::cors::CorsLayerExt;
+
+// Automatic www/non-www handling
+let cors = CorsLayer::default()
+    .allow_origin(frontend_url.parse::<HeaderValue>()?);
+```
 
 ### Testing Utilities
 
-Test helpers for making API requests:
+Test helpers for making authenticated and unauthenticated requests:
 
 ```rust
 use web_core::test::router_extensions::RouterExtensions;
 
-// In tests
-let response: MyResponse = app
+// POST without auth
+let response: CreateResponse = app
     .post_api("/api/users", Some(request_body))
     .await?;
 
-// With authentication
-let response: MyResponse = app
+// POST with access token
+let response: PostResponse = app
     .post_api_with_access_token("/api/posts", access_token, Some(request_body))
     .await?;
 
-// GET requests
-let response: MyResponse = app
+// GET with auth
+let response: GetResponse = app
     .get_api_with_access_token("/api/posts/123", access_token)
     .await?;
 
-// PUT requests
-let response: MyResponse = app
+// PUT and DELETE
+let response: UpdateResponse = app
     .put_api("/api/users/123", access_token, request_body)
     .await?;
-
-// DELETE requests
 app.delete_api("/api/posts/123", access_token).await?;
 ```
 
 ### Diesel Integration (feature: `diesel`)
 
-JSONB support for PostgreSQL:
+JSONB support for PostgreSQL with automatic serialization:
 
 ```rust
 use web_core::diesel::jsonb_data::JsonbData;
@@ -236,7 +334,6 @@ struct UserProfile {
     preferences: Vec<String>,
 }
 
-// In your Diesel model
 table! {
     users (id) {
         id -> Int4,
@@ -251,6 +348,33 @@ struct User {
 }
 ```
 
+Derive macro for JSONB columns:
+
+```rust
+use web_core::diesel_jsonb;
+
+#[derive(Serialize, Deserialize, diesel_jsonb)]
+struct Settings {
+    theme: String,
+    notifications: bool,
+}
+```
+
+### Ed25519 Signing
+
+```rust
+use web_core::utils::signatory;
+
+// Sign data
+let signature = signatory::sign(&signing_key_hex, "data to sign")?;
+
+// Verify signature
+signatory::verify(&verifying_key_hex, "data to sign", &signature)?;
+
+// Generate new keypair
+let (sk, vk) = signatory::generate_keypair()?;
+```
+
 ### AWS Integration (feature: `aws`)
 
 ```rust
@@ -262,8 +386,8 @@ send_email(
     "sender@example.com",
     "recipient@example.com",
     "Subject",
-    "HTML body",
-    "Text body"
+    "<h1>HTML Body</h1>",
+    "Plain text body"
 ).await?;
 ```
 
@@ -273,27 +397,39 @@ send_email(
 |--------|-------------|
 | `auth` | JWT authentication, password hashing, Google OAuth |
 | `cors` | CORS configuration with automatic www/non-www handling |
-| `error` | Error types and response handling |
+| `error` | Error types with `IntoResponse` implementations |
 | `middleware` | Logging and custom middleware support |
-| `validators` | Password, phone number, and request validation |
+| `validators` | `ValidatedJson`, password/phone validators, validation context |
 | `utils` | Ed25519 signing utilities |
-| `test` | Testing helpers for router testing |
-| `aws` *(feature)* | AWS SES and CloudFront utilities |
-| `diesel` *(feature)* | Diesel ORM integration with JSONB |
+| `test` | Router testing helpers |
+| `pagination` | Pagination utilities |
 | `web_core` | Core types: `WebCoreState`, `WebCoreOptions`, router extensions |
+| `axum` | Axum-specific utilities |
+| `diesel` | Diesel ORM integration with JSONB support |
+| `reqwest` | Reqwest client utilities |
+| `aws` *(feature)* | AWS SES email utilities |
 
 ## Error Types
 
-All errors implement `IntoResponse` for use in Axum handlers:
+All errors implement `IntoResponse` for seamless use in Axum handlers:
 
-- `FieldValidationError` → 400 Bad Request (field-level errors)
-- `BadRequestError` → 400 Bad Request (general errors)
-- `AuthenticationFailure` → 401 Unauthorized
-- `NotFound` → 404 Not Found
-- `SomethingWentWrong` → 500 Internal Server Error (logs details, returns generic message)
+| Error Type | HTTP Status | Description |
+|------------|-------------|-------------|
+| `FieldValidationError` | 400 | Field-level validation failures |
+| `BadRequestError` | 400 | General bad request |
+| `AuthenticationFailure` | 401 | Invalid or missing credentials |
+| `NotFound` | 404 | Resource not found |
+| `Forbidden` | 403 | Permission denied |
+| `SomethingWentWrong` | 500 | Internal server error (logs details, returns generic message) |
 
-Validator crates are a fork of Salman-Sali/validator-async which is a fork of Keats/validator. Validator crates contain extra logic to inject state.
+## Validation Crate Notes
+
+The validator crates (`web-core-validator`, `web-core-validator-derive`) are based on Salman-Sali/validator-async, which is a fork of Keats/validator. Key differences from the original:
+
+- **State-aware validation**: `Validate` trait accepts state parameter `S: Send + Sync`
+- **Mutable context**: `ValidateArgs` uses `&mut Self::Args` for context propagation
+- **Nested context**: `#[validate(nested(use_context))]` propagates parent context to nested validations
 
 ## License
 
-This project is licensed under the terms specified in the LICENSE file.
+MIT License - see [LICENSE](LICENSE) file for details.
