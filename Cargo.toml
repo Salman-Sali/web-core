@@ -2,6 +2,9 @@
 name = "web-core"
 version = "0.3.0"
 edition = "2024"
+description = "Core utils for Axum projects"
+homepage = "https://github.com/Salman-Sali/web-core"
+license = "MIT"
 
 [dependencies]
 argon2 = "0.5.3"
@@ -51,6 +54,6 @@ members = ["web-core-derive", "web-core-validator", "web-core-validator-derive"]
 web-core = { path = ".", features = ["all"]}
 
 [workspace.dependencies]
-web-core-derive = { path = "./web-core-derive" }
-web-core-validator = { path = "./web-core-validator" }
-web-core-validator-derive = { path = "./web-core-validator-derive" }
+web-core-derive = { version = "0.3.0", path = "./web-core-derive" }
+web-core-validator = { version = "0.3.0", path = "./web-core-validator" }
+web-core-validator-derive = { version = "0.3.0", path = "./web-core-validator-derive" }

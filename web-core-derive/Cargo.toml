@@ -2,7 +2,9 @@
 name = "web-core-derive"
 version = "0.3.0"
 edition = "2024"
-publish = false
+description = "Derive crate for web-core crate."
+homepage = "https://github.com/Salman-Sali/web-core"
+license = "MIT"
 
 [lib]
 proc-macro = true
@@ -18,4 +20,4 @@ diesel = []
 all = ["diesel"]
 
 [dev-dependencies]
-web-core-derive = { path = ".", features = ["all"] }
+web-core-derive = { version = "0.3.0", path = ".", features = ["all"] }
