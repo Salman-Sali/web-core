@@ -18,6 +18,3 @@ syn = "3.0.3"
 [features]
 diesel = []
 all = ["diesel"]
-
-[dev-dependencies]
-web-core-derive = { version = "0.3.0", path = ".", features = ["all"] }
