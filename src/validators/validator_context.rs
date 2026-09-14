@@ -1,5 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
+use axum::extract::FromRequestParts;
 use http::request::Parts;
 use serde::de::DeserializeOwned;
 
@@ -18,6 +19,13 @@ impl<S: Send + Sync + Clone> ValidatorContext<S> {
 
     pub fn parts(&self) -> &Parts {
         &self.parts
+    }
+
+    pub async fn from_request_parts<T>(&mut self) -> Result<T, T::Rejection>
+    where
+        T: FromRequestParts<S>,
+    {
+        T::from_request_parts(&mut self.parts, &self.state).await
     }
 
     pub fn state(&self) -> &S {

@@ -9,6 +9,9 @@ use diesel_migrations::EmbeddedMigrations;
 use sqlx::migrate::MigrateDatabase;
 
 pub mod jsonb_data;
+mod paginated_load;
+
+pub use paginated_load::PaginatedLoad;
 
 pub async fn create_pg_pool(
     migrations: EmbeddedMigrations,

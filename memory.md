@@ -55,3 +55,7 @@
 ## Error Handling Notes
 - `FieldErrors` is a tuple struct wrapping `HashMap<String, FieldError>`
 - Custom `Serialize` impl for `FieldErrors` forwards to inner HashMap to avoid extra nesting in serialized output
+
+## ValidatorContext Notes
+- `from_request_parts` requires `&mut self` because `FromRequestParts::from_request_parts` needs `&mut Parts`
+- Returns `Result<T, T::Rejection>` to properly propagate extraction errors
