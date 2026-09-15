@@ -2,20 +2,30 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-pub fn generate_diesel_enum_string(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn generate_diesel_enum_string(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    // Parse optional custom SQL type from attribute
+    let sql_type = if attr.is_empty() {
+        quote!(diesel::sql_types::Text)
+    } else {
+        let attr_str = attr.to_string().replace(' ', "");
+        let ty: syn::Type = syn::parse_str(&attr_str)
+            .unwrap_or_else(|_| syn::parse_str("diesel::sql_types::Text").unwrap());
+        quote!(#ty)
+    };
 
     let expanded = quote! {
         #[derive(
             diesel::expression::AsExpression,
             diesel::deserialize::FromSqlRow
         )]
-        #[diesel(sql_type = diesel::sql_types::Text)]
+        #[diesel(sql_type = #sql_type)]
         #input
 
-        impl #impl_generics diesel::serialize::ToSql<diesel::sql_types::Text, diesel::pg::Pg>
+        impl #impl_generics diesel::serialize::ToSql<#sql_type, diesel::pg::Pg>
             for #name #ty_generics #where_clause
         {
             fn to_sql<'b>(
@@ -28,7 +38,7 @@ pub fn generate_diesel_enum_string(_attr: TokenStream, item: TokenStream) -> Tok
             }
         }
 
-        impl #impl_generics diesel::deserialize::FromSql<diesel::sql_types::Text, diesel::pg::Pg>
+        impl #impl_generics diesel::deserialize::FromSql<#sql_type, diesel::pg::Pg>
             for #name #ty_generics #where_clause
         {
             fn from_sql(

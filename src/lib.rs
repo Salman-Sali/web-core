@@ -20,4 +20,7 @@ pub use serde_json;
 #[cfg(feature = "diesel")]
 pub use web_core_derive::diesel_jsonb;
 
+#[cfg(feature = "diesel")]
+pub use web_core_derive::diesel_enum_string;
+
 pub use validators::validator_context::ValidatorContext;

@@ -1,6 +1,6 @@
 [package]
 name = "web-core"
-version = "0.3.1"
+version = "0.3.3"
 edition = "2024"
 description = "Core utils for Axum projects"
 homepage = "https://github.com/Salman-Sali/web-core"
@@ -54,6 +54,6 @@ members = ["web-core-derive", "web-core-validator", "web-core-validator-derive"]
 web-core = { path = ".", features = ["all"]}
 
 [workspace.dependencies]
-web-core-derive = { version = "0.3.1", path = "./web-core-derive" }
-web-core-validator = { version = "0.3.1", path = "./web-core-validator" }
-web-core-validator-derive = { version = "0.3.1", path = "./web-core-validator-derive" }
+web-core-derive = { version = "0.3.3", path = "./web-core-derive" }
+web-core-validator = { version = "0.3.3", path = "./web-core-validator" }
+web-core-validator-derive = { version = "0.3.3", path = "./web-core-validator-derive" }
