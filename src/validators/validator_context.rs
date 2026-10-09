@@ -1,14 +1,15 @@
 use std::{any::Any, collections::HashMap};
 
-use axum::extract::FromRequestParts;
+use axum::{body::Bytes, extract::FromRequestParts};
 use http::request::Parts;
 use serde::de::DeserializeOwned;
 
-use crate::{axum::PathValueExtractor, error::Error};
+use crate::{axum::PathValueExtractor, error::Error, something_went_wrong};
 
 pub struct ValidatorContext<S: Send + Sync + Clone> {
     parts: Parts,
     state: S,
+    bytes: Bytes,
     memo: HashMap<String, Box<dyn Any + Send + Sync>>,
 }
 
@@ -26,6 +27,10 @@ impl<S: Send + Sync + Clone> ValidatorContext<S> {
         T: FromRequestParts<S>,
     {
         T::from_request_parts(&mut self.parts, &self.state).await
+    }
+
+    pub fn from_body<T: DeserializeOwned>(&self) -> Result<T, Error> {
+        Ok(serde_json::from_slice(&self.bytes).map_err(|e| something_went_wrong!("{:?}", e))?)
     }
 
     pub fn state(&self) -> &S {
@@ -47,11 +52,12 @@ impl<S: Send + Sync + Clone> ValidatorContext<S> {
     }
 }
 
-impl<S: Send + Sync + Clone> From<(Parts, S)> for ValidatorContext<S> {
-    fn from(value: (Parts, S)) -> Self {
+impl<S: Send + Sync + Clone> From<(Parts, Bytes, S)> for ValidatorContext<S> {
+    fn from(value: (Parts, Bytes, S)) -> Self {
         Self {
             parts: value.0,
-            state: value.1,
+            bytes: value.1,
+            state: value.2,
             memo: HashMap::new(),
         }
     }

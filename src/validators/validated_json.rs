@@ -47,14 +47,14 @@ where
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let (parts, body) = req.into_parts();
-        let bytes = axum::body::to_bytes(body, 1024 * 1024)
+        let bytes = axum::body::to_bytes(body, usize::MAX)
             .await
             .map_err(|_| (StatusCode::BAD_REQUEST, "Failed to read body").into_response())?;
 
         let value: T = serde_json::from_slice(&bytes)
             .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()).into_response())?;
 
-        let mut context = ValidatorContext::from((parts, state.clone()));
+        let mut context = ValidatorContext::from((parts, bytes, state.clone()));
         value
             .validate_with_args(&mut context)
             .await
