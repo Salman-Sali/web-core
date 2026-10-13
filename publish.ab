@@ -1,0 +1,134 @@
+// Publishes every crate in the workspace, dependencies first.
+// Order: web-core-validator-derive -> web-core-validator -> web-core-derive -> web-core
+//
+// 1. For each crate, checks whether its current version is already on crates.io.
+//    If so, asks for a bump (patch/minor/major) or to skip the crate.
+// 2. If the git tree is dirty, asks for a commit message and commits everything.
+// 3. Publishes the crates one after the other.
+//
+// Usage: amber publish.ab   (set DRY_RUN=1 to use `cargo publish --dry-run`)
+
+import { split } from "std/text"
+import { array_contains } from "std/array"
+
+fun manifest_path(crate: Text): Text {
+    if crate == "web-core" {
+        return "Cargo.toml"
+    }
+    return "{crate}/Cargo.toml"
+}
+
+fun read_version(crate: Text): Text {
+    let path = manifest_path(crate)
+    return trust $ sed -n 's/^version = "\\(.*\\)"/\\1/p' {path} | head -1 $
+}
+
+fun is_published(crate: Text, version: Text): Bool {
+    let found = trust $ curl -sf -A "publish-script" https://crates.io/api/v1/crates/{crate}/{version} > /dev/null && echo yes || echo no $
+    return found == "yes"
+}
+
+fun ask(prompt: Text): Text {
+    return trust $ read -r -p "{prompt}" reply; echo "\$reply" $
+}
+
+fun bump(version: Text, kind: Text): Text {
+    let parts = split(version, ".")
+    let major = parts[0]
+    let minor = parts[1]
+    let patch = parts[2]
+    if kind == "major" {
+        return trust $ echo "\$(( {major} + 1 )).0.0" $
+    }
+    if kind == "minor" {
+        return trust $ echo "{major}.\$(( {minor} + 1 )).0" $
+    }
+    return trust $ echo "{major}.{minor}.\$(( {patch} + 1 ))" $
+}
+
+// Rewrites the crate's own version and the matching entry in the root [workspace.dependencies].
+fun write_version(crate: Text, old: Text, new: Text) {
+    let path = manifest_path(crate)
+    trust $ sed -i '0,/^version = "{old}"/s//version = "{new}"/' {path} $
+    trust $ sed -i 's/^\\({crate} = \{ version = "\\)[^"]*"/\\1{new}"/' Cargo.toml $
+}
+
+main {
+    let crates = [
+        "web-core-validator-derive",
+        "web-core-validator",
+        "web-core-derive",
+        "web-core"
+    ]
+    let dry_run = trust $ [ "\$\{DRY_RUN:-0}" = "1" ] && echo yes || echo no $
+    let skipped = [Text]
+
+    // 1. Version check
+    for crate in crates {
+        let version = read_version(crate)
+        if is_published(crate, version) {
+            echo "{crate} {version} is already published on crates.io."
+            let choice = ask("Bump [p]atch, [m]inor, M[a]jor or [s]kip this crate? ")
+            if choice == "s" {
+                skipped += [crate]
+            } else {
+                let kind = "patch"
+                if choice == "m" {
+                    kind = "minor"
+                }
+                if choice == "a" {
+                    kind = "major"
+                }
+                let new_version = bump(version, kind)
+                write_version(crate, version, new_version)
+                echo "{crate}: {version} -> {new_version}"
+            }
+        } else {
+            echo "{crate} {version} is not published yet."
+        }
+    }
+
+    // 2. Commit if dirty
+    let dirty = trust $ [ -n "\$(git status --porcelain)" ] && echo yes || echo no $
+    if dirty == "yes" {
+        echo ""
+        trust $ git status --short $
+        let message = ""
+        while message == "" {
+            message = ask("Working tree has uncommitted changes. Commit message: ")
+        }
+        $ git add -A $ failed {
+            echo "git add failed"
+            exit(1)
+        }
+        $ git commit -m "{message}" $ failed {
+            echo "git commit failed"
+            exit(1)
+        }
+    }
+
+    // 3. Publish
+    for crate in crates {
+        if array_contains(skipped, crate) {
+            echo "==> Skipping {crate}"
+            continue
+        }
+        echo "==> Publishing {crate}"
+        if dry_run == "yes" {
+            $ cargo publish -p {crate} --dry-run $ failed {
+                echo "Dry run failed for {crate}"
+                exit(1)
+            }
+        } else {
+            $ cargo publish -p {crate} $ failed {
+                echo "Publish failed for {crate}"
+                exit(1)
+            }
+            // let the crates.io index catch up before dependents are published
+            echo "Waiting for index to update..."
+            trust $ sleep 30 $
+        }
+    }
+
+    echo "Done."
+}

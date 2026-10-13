@@ -8,7 +8,8 @@ pub struct PasswordValidator {
 }
 
 pub const SPECIAL_SYMBOLS: [char; 32] = [
-    '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '|', '}', '~',
+    '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=',
+    '>', '?', '@', '[', '\\', ']', '^', '_', '`', '{', '|', '}', '~',
 ];
 
 impl PasswordValidator {
@@ -55,11 +56,16 @@ impl PasswordValidator {
             None => true,
         };
 
-        uppercase_check_pass && lowercase_check_pass && digit_check_pass && special_symbols_check_pass && min_length_check_pass && max_length_check_pass
+        uppercase_check_pass
+            && lowercase_check_pass
+            && digit_check_pass
+            && special_symbols_check_pass
+            && min_length_check_pass
+            && max_length_check_pass
     }
 
     pub fn with_min_length(mut self, length: usize) -> Self {
-        self.must_have_maxiumum_length = Some(length);
+        self.must_have_minimum_length = Some(length);
         self
     }
 
