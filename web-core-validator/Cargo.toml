@@ -1,6 +1,6 @@
 [package]
 name = "web-core-validator"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2024"
 description = "Supporting validator crate for web-core crate"
 homepage = "https://github.com/Salman-Sali/web-core"

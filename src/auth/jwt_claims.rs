@@ -11,7 +11,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::{error::Error, something_went_wrong, web_core::WebCoreState};
+use crate::{error::Error, unauthorized, web_core::WebCoreState};
 
 use super::{auth_service::TokenPurpose, authenticated_user::AuthenticatedUser};
 
@@ -71,7 +71,7 @@ where
                 TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
                     .await
                     .map_err(|e| {
-                        something_went_wrong!("Error while getting bearer token : {:?}", e)
+                        unauthorized!("Error while getting bearer token : {:?}", e)
                     })?;
 
             let state = WebCoreState::<()>::from_ref(state);
