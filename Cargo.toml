@@ -54,6 +54,6 @@ members = ["web-core-derive", "web-core-validator", "web-core-validator-derive"]
 web-core = { path = ".", features = ["all"]}
 
 [workspace.dependencies]
-web-core-derive = { version = "0.3.6", path = "./web-core-derive" }
-web-core-validator = { version = "0.3.6", path = "./web-core-validator" }
-web-core-validator-derive = { version = "0.3.6", path = "./web-core-validator-derive" }
+web-core-derive = { version = "0.3.7", path = "./web-core-derive" }
+web-core-validator = { version = "0.3.7", path = "./web-core-validator" }
+web-core-validator-derive = { version = "0.3.7", path = "./web-core-validator-derive" }
