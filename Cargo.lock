@@ -4026,7 +4026,7 @@ dependencies = [
 
 [[package]]
 name = "web-core"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "argon2",
  "askama",
