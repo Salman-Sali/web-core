@@ -1,6 +1,6 @@
 [package]
 name = "web-core-backup"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 description = "Postgres and folder backups to S3, with backup/restore subcommands, for web-core apps"
 homepage = "https://github.com/Salman-Sali/web-core"

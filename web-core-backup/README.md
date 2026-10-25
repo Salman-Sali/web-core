@@ -64,11 +64,11 @@ async fn main() {
 | Method | |
 |---|---|
 | `database(name, connection_string)` | Repeatable. Every schema of the database is included. `name` identifies the dump inside the archive. Connection strings are never stored in the archive. |
-| `folder(name, path)` | Repeatable. A folder that does not exist yet is archived as empty. |
+| `folder(name, path)` | Repeatable. A folder that does not exist yet is archived as empty. Registering one parent folder (the app's whole data directory) is fine, as long as `work_dir` is not inside it. |
 | `s3(S3Target)` | Bucket and region are required. `profile` is a named profile in the service user's `~/.aws`. `prefix` defaults to the app name. |
 | `notify(EmailNotify)` | Sent through SES with the same profile and region. Emails on failure only by default; add `.on_success(true)` to also email on success. `from` must be a verified SES identity. |
 | `schedule_every(Duration)` | Interval for `start_scheduler()`. |
-| `work_dir(path)` | Holds the dumps, downloads and lock file. Defaults to `/var/tmp`. |
+| `work_dir(path)` | Holds the dumps, downloads, the lock file and the last-backup record. Defaults to `/var/tmp`. **Must lie outside every registered folder**: the dumps are written here while the folders are streamed, so a work dir inside a registered folder ends up in the archive, and a later restore refuses because that folder is not empty. |
 | `service_name(unit)` | The systemd unit that restore checks is stopped. Defaults to `<app>.service`. |
 | `app_version(v)` | Recorded in the archive manifest. |
 
@@ -163,5 +163,5 @@ Add a lifecycle rule on the bucket that aborts incomplete multipart uploads afte
 
 ## Notes
 
-- If the unit uses `PrivateTmp=`, `/var/tmp` inside the service is not the same `/var/tmp` you see from a shell. In that case the lock file and the scheduler's last-backup record are not shared with manual runs. Set `work_dir` to a directory under the app's state dir, such as `/var/lib/my-api/backup`, to avoid this.
+- Do not set `PrivateTmp=` in the unit. With it, `/var/tmp` inside the service is not the same `/var/tmp` you see from a shell, so the lock file and the scheduler's last-backup record are not shared with manual `backup` runs. If the unit must keep `PrivateTmp=`, set `work_dir` to a directory that is **not inside any registered folder**, for example `/var/lib/my-api-backup` next to (not under) a registered `/var/lib/my-api`.
 - Passwords in `postgres://` connection strings are passed to the Postgres tools through `PGPASSWORD`, not on the command line.
