@@ -244,7 +244,7 @@ impl RouterExtensions for Router {
             Ok(serde_json::from_slice(&bytes)
                 .expect("Error while converting json bytes into struct object."))
         } else {
-            println!("{:?}", bytes);
+            tracing::info!(status = status.as_u16(), body = ?bytes, "Non-success test response");
             let body = serde_json::from_slice(&bytes)
                 .expect("Error while converting json bytes into struct object.");
             Err(ErrorResponse::new(status, body))

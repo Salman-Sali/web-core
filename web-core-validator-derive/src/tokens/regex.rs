@@ -1,7 +1,7 @@
 use quote::quote;
 
 use crate::types::Regex;
-use crate::utils::{quote_code, quote_message, CrateName};
+use crate::utils::{CrateName, quote_code, quote_message};
 
 pub fn regex_tokens(
     crate_name: &CrateName,

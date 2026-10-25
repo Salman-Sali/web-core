@@ -2,7 +2,7 @@
 macro_rules! something_went_wrong {
     () => {
         $crate::error::Error::new_something_went_wrong("")
-    };    
+    };
     ($($arg:tt)*) => {{
         $crate::error::Error::new_something_went_wrong(format!($($arg)*))
     }};
@@ -40,5 +40,15 @@ macro_rules! not_found {
     };
     ($($arg:tt)*) => {{
         $crate::error::Error::new_not_found(&format!($($arg)*))
+    }};
+}
+
+#[macro_export]
+macro_rules! conflict {
+    () => {
+        $crate::error::Error::new_conflict("Conflict")
+    };
+    ($($arg:tt)*) => {{
+        $crate::error::Error::new_conflict(&format!($($arg)*))
     }};
 }

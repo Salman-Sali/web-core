@@ -9,11 +9,12 @@
 - JWT (jsonwebtoken)
 - Argon2 for password hashing
 - Ed25519 for signing
-- Diesel ORM (optional)
+- Diesel ORM (optional; sync r2d2 via `diesel`, async deadpool via `diesel-async`)
+- tracing for logs (request logger, 500 handler, reqwest helper)
 - AWS SDK (optional)
 
 ## Architecture
-- Feature-gated modules (`aws`, `diesel`, `derive`)
+- Feature-gated modules (`aws`, `diesel`, `diesel-async`, `derive`)
 - Trait-based extensibility (`AuthHandler`, `PasswordHandler`, `WebCore`)
 - Uniform error handling with `IntoResponse` impls
 - JWT-based auth with HS512 signing
@@ -25,14 +26,17 @@
 | `src/error/` | Error types and IntoResponse impls |
 | `src/web_core.rs` | WebCoreState, WebCoreOptions, router extensions |
 | `src/validators/` | Password, phone, validated_json extractors, validator context |
-| `src/test/` | Router testing utilities |
-| `src/macros.rs` | Error macros (bad_request!, unauthorized!, etc) |
+| `src/test/` | Router testing utilities; `test_database.rs` = `TestDatabase` (per-test Postgres DB cloned from a migrated template) |
+| `src/diesel/` | `create_pg_pool` + `PaginatedLoad` (sync), `async_pool.rs` + `async_paginated_load.rs` (feature `diesel-async`), JSONB |
+| `tests/` | Workspace integration tests; `postgres.rs` needs `TEST_DATABASE_URL` (skips without it), migrations in `tests/migrations/` |
+| `src/macros.rs` | Error macros (bad_request!, unauthorized!, not_found!, conflict!, something_went_wrong!) |
 | `src/pagination/` | Pagination utilities |
 | `src/axum/` | Axum-specific utilities |
 | `src/reqwest/` | Reqwest client helpers |
 | `web-core-derive/` | Procedural macros (diesel_jsonb) |
 | `web-core-validator/` | Validation traits and implementations (state-aware) |
 | `web-core-validator-derive/` | Procedural macros for derive(Validate) |
+| `web-core-backup/` | Postgres + folder backups to S3, `<bin> backup` / `<bin> restore` subcommands, scheduler |
 
 ## Documentation
 | File | Description |
@@ -61,8 +65,18 @@
   - Added custom `FromMeta` implementation for `Nested` struct to support both `#[validate(nested)]` and `#[validate(nested(use_context))]` syntaxes
 
 ## Error Handling Notes
+- `Error::Conflict` (409, `{"error": msg}`) via `conflict!`; diesel `UniqueViolation` maps to it ("Conflict on <constraint>")
+- `ValidationError::internal(e)` (code `__internal__`) anywhere in `ValidationErrors` makes `From<ValidationErrors> for Error` return 500 instead of 400
+- `SomethingWentWrong::print_error` logs with `tracing::error!(error_id, details)`
 - `FieldErrors` is a tuple struct wrapping `HashMap<String, FieldError>`
 - Custom `Serialize` impl for `FieldErrors` forwards to inner HashMap to avoid extra nesting in serialized output
+
+## Async Diesel / TestDatabase Notes
+- `AsyncPaginatedLoad` reuses `Paginated<T>` (`Paginated::new`); diesel-async's `RunQueryDsl` is blanket-implemented for all types, so it is called by path to avoid shadowing `Vec::first`
+- Projects import either `PaginatedLoad` or `AsyncPaginatedLoad`, not both (same method name)
+- `TestDatabase` template name = `<base>_tpl_<8 hex FNV-1a of migration names>`; ready marker is a `COMMENT ON DATABASE`; Drop joins a std::thread running `DROP DATABASE ... WITH (FORCE)`
+- sqlx needs `runtime-tokio` (enabled in web-core since 0.4.0) for the database-exists/create check
+- `cargo --all-features` needs nightly (`web-core-validator/derive_nightly_features`)
 
 ## ValidatorContext Notes
 - `from_request_parts` requires `&mut self` because `FromRequestParts::from_request_parts` needs `&mut Parts`

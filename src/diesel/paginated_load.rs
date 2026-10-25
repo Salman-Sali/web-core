@@ -13,6 +13,18 @@ pub struct Paginated<T> {
     offset: i64,
 }
 
+impl<T> Paginated<T> {
+    /// Wraps `query` as `SELECT *, COUNT(*) OVER () FROM (<query>) t LIMIT $1 OFFSET $2`.
+    /// Shared by the sync [`PaginatedLoad`] and the async `AsyncPaginatedLoad`.
+    pub(crate) fn new(query: T, pagination: &impl Pagination) -> Self {
+        Self {
+            query,
+            per_page: pagination.per_page(),
+            offset: pagination.offset(),
+        }
+    }
+}
+
 impl<T: Query> Query for Paginated<T> {
     type SqlType = (T::SqlType, BigInt);
 }
@@ -34,6 +46,11 @@ where
     }
 }
 
+/// Sync (r2d2 / `PgConnection`) pagination.
+///
+/// A project imports either `PaginatedLoad` or `AsyncPaginatedLoad` (feature `diesel-async`),
+/// not both: both are blanket-implemented for every `Query` and share the method name
+/// `paginated_load`, so having both in scope makes calls ambiguous.
 pub trait PaginatedLoad: Sized + Query {
     fn paginated_load<'query, T, R>(
         self,
@@ -44,11 +61,7 @@ pub trait PaginatedLoad: Sized + Query {
         Paginated<Self>: LoadQuery<'query, PgConnection, (T, i64)>,
         R: From<T>,
     {
-        let wrapped = Paginated {
-            query: self,
-            per_page: pagination.per_page(),
-            offset: pagination.offset(),
-        };
+        let wrapped = Paginated::new(self, pagination);
         let results = wrapped.load::<(T, i64)>(conn)?;
         let total = results.first().map(|(_, t)| *t).unwrap_or(0);
         let items = results.into_iter().map(|(item, _)| item).collect();

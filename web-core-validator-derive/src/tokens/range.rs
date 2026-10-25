@@ -1,7 +1,7 @@
 use quote::quote;
 
 use crate::types::Range;
-use crate::utils::{quote_code, quote_message, CrateName};
+use crate::utils::{CrateName, quote_code, quote_message};
 
 pub fn range_tokens(
     crate_name: &CrateName,
@@ -10,25 +10,37 @@ pub fn range_tokens(
     field_name_str: &str,
 ) -> proc_macro2::TokenStream {
     let (min, min_err) = if let Some(m) = range.min {
-        (quote!(Some(#m)), quote!(err.add_param(::std::borrow::Cow::from("min"), &#m);))
+        (
+            quote!(Some(#m)),
+            quote!(err.add_param(::std::borrow::Cow::from("min"), &#m);),
+        )
     } else {
         (quote!(None), quote!())
     };
 
     let (max, max_err) = if let Some(m) = range.max {
-        (quote!(Some(#m)), quote!(err.add_param(::std::borrow::Cow::from("max"), &#m);))
+        (
+            quote!(Some(#m)),
+            quote!(err.add_param(::std::borrow::Cow::from("max"), &#m);),
+        )
     } else {
         (quote!(None), quote!())
     };
 
     let (ex_min, ex_min_err) = if let Some(m) = range.exclusive_min {
-        (quote!(Some(#m)), quote!(err.add_param(::std::borrow::Cow::from("exclusive_min"), &#m);))
+        (
+            quote!(Some(#m)),
+            quote!(err.add_param(::std::borrow::Cow::from("exclusive_min"), &#m);),
+        )
     } else {
         (quote!(None), quote!())
     };
 
     let (ex_max, ex_max_err) = if let Some(m) = range.exclusive_max {
-        (quote!(Some(#m)), quote!(err.add_param(::std::borrow::Cow::from("exclusive_max"), &#m);))
+        (
+            quote!(Some(#m)),
+            quote!(err.add_param(::std::borrow::Cow::from("exclusive_max"), &#m);),
+        )
     } else {
         (quote!(None), quote!())
     };

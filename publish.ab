@@ -1,5 +1,5 @@
 // Publishes every crate in the workspace, dependencies first.
-// Order: web-core-validator-derive -> web-core-validator -> web-core-derive -> web-core
+// Order: web-core-validator-derive -> web-core-validator -> web-core-derive -> web-core-backup -> web-core
 //
 // 1. For each crate, checks whether its current version is already on crates.io.
 //    If so, asks for a bump (patch/minor/major) or to skip the crate.
@@ -58,6 +58,7 @@ main {
         "web-core-validator-derive",
         "web-core-validator",
         "web-core-derive",
+        "web-core-backup",
         "web-core"
     ]
     let dry_run = trust $ [ "\$\{DRY_RUN:-0}" = "1" ] && echo yes || echo no $

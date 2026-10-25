@@ -1,7 +1,7 @@
 use quote::quote;
 
 use crate::types::Length;
-use crate::utils::{quote_code, quote_message, CrateName};
+use crate::utils::{CrateName, quote_code, quote_message};
 
 pub fn length_tokens(
     crate_name: &CrateName,
@@ -10,17 +10,26 @@ pub fn length_tokens(
     field_name_str: &str,
 ) -> proc_macro2::TokenStream {
     let (min, min_err) = if let Some(v) = length.min.as_ref() {
-        (quote!(Some(#v)), quote!(err.add_param(::std::borrow::Cow::from("min"), &#v);))
+        (
+            quote!(Some(#v)),
+            quote!(err.add_param(::std::borrow::Cow::from("min"), &#v);),
+        )
     } else {
         (quote!(None), quote!())
     };
     let (max, max_err) = if let Some(v) = length.max {
-        (quote!(Some(#v)), quote!(err.add_param(::std::borrow::Cow::from("max"), &#v);))
+        (
+            quote!(Some(#v)),
+            quote!(err.add_param(::std::borrow::Cow::from("max"), &#v);),
+        )
     } else {
         (quote!(None), quote!())
     };
     let (equal, equal_err) = if let Some(v) = length.equal {
-        (quote!(Some(#v)), quote!(err.add_param(::std::borrow::Cow::from("equal"), &#v);))
+        (
+            quote!(Some(#v)),
+            quote!(err.add_param(::std::borrow::Cow::from("equal"), &#v);),
+        )
     } else {
         (quote!(None), quote!())
     };

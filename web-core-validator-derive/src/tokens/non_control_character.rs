@@ -1,7 +1,7 @@
 use quote::quote;
 
 use crate::types::NonControlCharacter;
-use crate::utils::{quote_code, quote_message, CrateName};
+use crate::utils::{CrateName, quote_code, quote_message};
 
 pub fn non_control_char_tokens(
     crate_name: &CrateName,

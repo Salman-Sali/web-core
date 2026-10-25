@@ -23,6 +23,36 @@ impl ValidationError {
         }
     }
 
+    /// Code used by [`ValidationError::internal`].
+    pub const INTERNAL_CODE: &'static str = "__internal__";
+
+    /// An error that is not the client's fault (e.g. a database lookup inside a custom validator
+    /// failed). The code is `__internal__` and the message is `error`'s `Display` text.
+    ///
+    /// `web-core` turns validation results containing such an error into a 500
+    /// (`something_went_wrong!`) instead of a 400 field-validation error.
+    ///
+    /// ```
+    /// use web_core_validator::ValidationError;
+    ///
+    /// let err = ValidationError::internal("connection refused");
+    /// assert!(err.is_internal());
+    /// assert_eq!(err.message.as_deref(), Some("connection refused"));
+    /// ```
+    pub fn internal(error: impl std::fmt::Display) -> ValidationError {
+        ValidationError {
+            code: Cow::Borrowed(Self::INTERNAL_CODE),
+            message: Some(Cow::Owned(error.to_string())),
+            params: HashMap::new(),
+            list_error: None,
+        }
+    }
+
+    /// Whether this error was created with [`ValidationError::internal`].
+    pub fn is_internal(&self) -> bool {
+        self.code == Self::INTERNAL_CODE
+    }
+
     pub fn add_param<T: Serialize>(&mut self, name: Cow<'static, str>, val: &T) {
         self.params.insert(name, to_value(val).unwrap());
     }

@@ -1,6 +1,6 @@
 [package]
 name = "web-core"
-version = "0.3.7"
+version = "0.4.0"
 edition = "2024"
 description = "Core utils for Axum projects"
 homepage = "https://github.com/Salman-Sali/web-core"
@@ -33,10 +33,13 @@ aws-sdk-sesv2 = { version = "1.111.0", optional = true }
 diesel = { version = "2.3.11",  features = ["postgres", "r2d2"], optional = true }
 askama = "0.14.0"
 diesel_migrations = { version= "2.3.2", optional = true }
-sqlx = { version = "0.8.6", features = ["postgres"] }
+diesel-async = { version = "0.9.2", features = ["postgres", "deadpool"], optional = true }
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio"] }
 phonenumber = "0.3.10"
 web-core-derive = { workspace = true, optional = true }
 web-core-validator = { workspace = true }
+tracing = "0.1.44"
+tokio = { version = "1.54.1", features = ["rt", "sync"] }
 
 [features]
 default = [ ]
@@ -45,15 +48,23 @@ aws = [
 ]
 derive = ["dep:web-core-derive"]
 diesel = ["derive", "dep:diesel", "dep:diesel_migrations", "web-core-derive/diesel"]
-all = ["aws", "derive", "diesel"]
+diesel-async = ["diesel", "dep:diesel-async"]
+all = ["aws", "derive", "diesel", "diesel-async"]
 
 [workspace]
-members = ["web-core-derive", "web-core-validator", "web-core-validator-derive"]
+members = ["web-core-derive", "web-core-validator", "web-core-validator-derive", "web-core-backup"]
 
 [dev-dependencies]
 web-core = { path = ".", features = ["all"]}
+diesel = { version = "2.3.11", features = ["postgres"] }
+diesel_migrations = "2.3.2"
+diesel-async = { version = "0.9.2", features = ["postgres", "deadpool"] }
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }
+web-core-validator = { workspace = true }
+url = "2.5.7"
+uuid = { version = "1.18.1", features = ["v4"] }
 
 [workspace.dependencies]
-web-core-derive = { version = "0.3.7", path = "./web-core-derive" }
-web-core-validator = { version = "0.3.7", path = "./web-core-validator" }
-web-core-validator-derive = { version = "0.3.7", path = "./web-core-validator-derive" }
+web-core-derive = { version = "0.4.0", path = "./web-core-derive" }
+web-core-validator = { version = "0.4.0", path = "./web-core-validator" }
+web-core-validator-derive = { version = "0.4.0", path = "./web-core-validator-derive" }

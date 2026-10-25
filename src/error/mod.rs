@@ -1,5 +1,6 @@
 pub mod authentication;
 pub mod bad_request;
+pub mod conflict;
 pub mod field_validation;
 pub mod not_found;
 pub mod something_went_wrong;
@@ -13,10 +14,11 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use bad_request::BadRequestError;
+use conflict::ConflictError;
 use field_validation::FieldValidationErrors;
 use not_found::NotFoundError;
 use something_went_wrong::SomethingWentWrong;
-use web_core_validator::ValidationErrors;
+use web_core_validator::{ValidationError, ValidationErrors, ValidationErrorsKind};
 
 use crate::error::field_validation::{FieldErrorKind, FieldErrors};
 
@@ -27,6 +29,7 @@ pub enum Error {
     SomethingWentWrong(SomethingWentWrong),
     AuthenticationFailure(AuthenticationError),
     NotFound(NotFoundError),
+    Conflict(ConflictError),
 }
 
 impl Error {
@@ -59,6 +62,10 @@ impl Error {
         let not_found_error = NotFoundError::new(message.to_string());
         Error::NotFound(not_found_error)
     }
+
+    pub fn new_conflict(message: &str) -> Error {
+        Error::Conflict(ConflictError::new(message.to_string()))
+    }
 }
 
 impl IntoResponse for Error {
@@ -80,14 +87,45 @@ impl IntoResponse for Error {
                 authentication_error.into_response()
             }
             Error::NotFound(not_found_error) => not_found_error.into_response(),
+            Error::Conflict(conflict_error) => conflict_error.into_response(),
         }
     }
 }
 
+/// Converts validation failures into an API error (used by `ValidatedJson` / `ValidatedJsonWithCtx`).
+///
+/// Normally this is a 400 [`Error::FieldValidationError`]. If any field error anywhere in the
+/// tree (including nested structs and lists) was created with [`ValidationError::internal`]
+/// (`is_internal()`), the result is instead [`Error::SomethingWentWrong`] (500) carrying that
+/// error's message. This lets a validator that talks to a database (or anything else that can
+/// fail) report an infrastructure failure as a real 500 instead of unwrapping or returning a
+/// misleading 400:
+///
+/// ```rust,ignore
+/// async fn unique_email(email: &str, ctx: &mut ValidatorContext<AppState>) -> Result<(), ValidationError> {
+///     let taken = email_exists(ctx.state(), email).await.map_err(ValidationError::internal)?;
+///     if taken { return Err(("email_taken", "Email is already registered").into()); }
+///     Ok(())
+/// }
+/// ```
 impl From<ValidationErrors> for Error {
     fn from(err: ValidationErrors) -> Self {
+        if let Some(internal) = find_internal_error(&err) {
+            return crate::something_went_wrong!(
+                "Internal error during validation: {}",
+                internal.message.as_deref().unwrap_or_default()
+            );
+        }
         Error::FieldValidationError(FieldValidationErrors { fields: err.into() })
     }
+}
+
+fn find_internal_error(errors: &ValidationErrors) -> Option<&ValidationError> {
+    errors.0.values().find_map(|kind| match kind {
+        ValidationErrorsKind::Field(errors) => errors.iter().find(|e| e.is_internal()),
+        ValidationErrorsKind::Struct(nested) => find_internal_error(nested),
+        ValidationErrorsKind::List(items) => items.values().find_map(|e| find_internal_error(e)),
+    })
 }
 
 impl From<askama::Error> for Error {
@@ -103,9 +141,28 @@ impl From<diesel::r2d2::PoolError> for Error {
     }
 }
 
+#[cfg(feature = "diesel-async")]
+impl From<diesel_async::pooled_connection::deadpool::PoolError> for Error {
+    fn from(value: diesel_async::pooled_connection::deadpool::PoolError) -> Self {
+        Error::new_something_went_wrong(format!("{} {:?}", value, value))
+    }
+}
+
+/// Unique-constraint violations become [`Error::Conflict`] (409) with the message
+/// `"Conflict on <constraint>"` (or `"Conflict"` when Postgres reports no constraint name).
+/// Every other Diesel error becomes [`Error::SomethingWentWrong`] (500).
 #[cfg(feature = "diesel")]
 impl From<diesel::result::Error> for Error {
     fn from(value: diesel::result::Error) -> Self {
-        Error::new_something_went_wrong(format!("{} {:?}", value, value))
+        use diesel::result::{DatabaseErrorKind, Error as DieselError};
+        match value {
+            DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, info) => {
+                match info.constraint_name() {
+                    Some(constraint) => Error::new_conflict(&format!("Conflict on {constraint}")),
+                    None => Error::new_conflict("Conflict"),
+                }
+            }
+            value => Error::new_something_went_wrong(format!("{} {:?}", value, value)),
+        }
     }
 }

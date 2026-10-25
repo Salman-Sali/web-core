@@ -1,0 +1,26 @@
+[package]
+name = "web-core-backup"
+version = "0.4.0"
+edition = "2024"
+description = "Postgres and folder backups to S3, with backup/restore subcommands, for web-core apps"
+homepage = "https://github.com/Salman-Sali/web-core"
+license = "MIT"
+
+[dependencies]
+aws-config = { version = "1.13.0", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1.155.0"
+aws-sdk-sesv2 = "1.143.0"
+chrono = "0.4.45"
+gethostname = "1.1.0"
+libc = "0.2.191"
+percent-encoding = "2.3.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tar = "0.4.46"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "process", "fs", "time", "io-util", "sync"] }
+url = "2.5.8"
+zstd = "0.14.3"
+
+[dev-dependencies]
+tempfile = "3.27.0"

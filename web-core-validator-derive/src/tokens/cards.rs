@@ -1,7 +1,7 @@
 use quote::quote;
 
 use crate::types::Card;
-use crate::utils::{quote_code, quote_message, CrateName};
+use crate::utils::{CrateName, quote_code, quote_message};
 
 pub fn credit_card_tokens(
     crate_name: &CrateName,

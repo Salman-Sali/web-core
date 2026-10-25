@@ -1,6 +1,12 @@
 use std::time::Instant;
 
-use axum::{body::Body, http::Request, middleware::{self, Next}, response::Response, Router};
+use axum::{
+    Router,
+    body::Body,
+    http::Request,
+    middleware::{self, Next},
+    response::Response,
+};
 
 use crate::web_core::WebCoreState;
 
@@ -22,20 +28,29 @@ pub async fn logging_middleware(req: Request<Body>, next: Next) -> Response {
     let status = response.status();
     let elapsed = start.elapsed();
 
-    println!(
+    tracing::info!(
+        status = status.as_u16(),
+        method = %method,
+        uri = %uri,
+        client_ip = %client_ip,
+        elapsed_ms = elapsed.as_millis() as u64,
         "[{}] {} {} from {} in {:?}",
-        status, method, uri, client_ip, elapsed
+        status,
+        method,
+        uri,
+        client_ip,
+        elapsed
     );
 
     response
 }
 
 pub trait LoggingMiddlewareLayer {
-    fn with_logging_layer(self)  -> Self;
+    fn with_logging_layer(self) -> Self;
 }
 
 impl<T: Clone + Send + Sync + 'static> LoggingMiddlewareLayer for Router<WebCoreState<T>> {
-    fn with_logging_layer(self)  -> Self {
+    fn with_logging_layer(self) -> Self {
         self.layer(middleware::from_fn(logging_middleware))
     }
 }

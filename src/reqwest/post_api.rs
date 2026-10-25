@@ -11,12 +11,12 @@ where
     let api_url = match url.join(url_path) {
         Ok(x) => x,
         Err(e) => {
-            eprintln!("Error while joining url with path : {}", e);
+            tracing::error!("Error while joining url with path : {}", e);
             return Err(());
         }
     };
 
-    println!("Api call begin : {:?}", api_url);
+    tracing::info!(url = %api_url, "Api call begin : {:?}", api_url);
 
     let client = Client::new();
     let response = client
@@ -26,26 +26,30 @@ where
         .send()
         .await;
 
-    println!("Api call response: {:?}", response);
+    tracing::debug!("Api call response: {:?}", response);
 
     let response = match response {
         Ok(x) => x,
         Err(e) => {
-            eprintln!("Error while calling api : {} : {}", api_url, e);
+            tracing::error!(url = %api_url, "Error while calling api : {} : {}", api_url, e);
             return Err(());
         }
     };
 
     if !response.status().is_success() {
-        println!("Api call failed with status code : {}", response.status());
+        tracing::warn!(
+            status = response.status().as_u16(),
+            "Api call failed with status code : {}",
+            response.status()
+        );
         return Err(());
     }
 
     match response.json().await {
         Ok(x) => Ok(x),
         Err(e) => {
-            eprintln!("Error while deserialising api resonse : {}", e);
+            tracing::error!("Error while deserialising api resonse : {}", e);
             Err(())
-        },
+        }
     }
 }

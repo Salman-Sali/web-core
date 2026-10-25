@@ -10,14 +10,14 @@ A Rust crate providing core utilities for building web applications with Axum. F
 
 ```toml
 [dependencies]
-web-core = { version = "0.3.0", features = ["derive"] }
+web-core = { version = "0.4.0", features = ["derive"] }
 
 [features]
 # Enables CORS allow-all for local development
 local = ["web-core/local"]
 
 [dev-dependencies]
-web-core = { version = "0.3.0", features = ["all"] }
+web-core = { version = "0.4.0", features = ["all"] }
 ```
 
 ### Crate Structure
@@ -30,15 +30,17 @@ This workspace contains four crates:
 | `web-core-derive` | Procedural macros (e.g., `diesel_jsonb`) |
 | `web-core-validator` | Validation traits and implementations (fork of Keats/validator) |
 | `web-core-validator-derive` | Procedural macros for `derive(Validate)` |
+| `web-core-backup` | Postgres + folder backups to S3 with `backup`/`restore` subcommands ([README](web-core-backup/README.md)) |
 
 ### Optional Features
 
 | Feature | Description |
 |---------|-------------|
 | `aws` | AWS SES email sending |
-| `diesel` | Diesel ORM integration with JSONB support |
+| `diesel` | Diesel ORM integration (sync r2d2 pool, pagination, JSONB, `TestDatabase`) |
+| `diesel-async` | Async Diesel pool (`diesel-async` + deadpool) and `AsyncPaginatedLoad`; enables `diesel` |
 | `derive` | Procedural macros (includes `diesel_jsonb`) |
-| `all` | Enables all features (`aws`, `derive`, `diesel`) |
+| `all` | Enables all features (`aws`, `derive`, `diesel`, `diesel-async`) |
 
 ## Quick Start
 
@@ -261,7 +263,7 @@ Structured errors with automatic `IntoResponse`:
 ```rust
 use web_core::{
     error::Error,
-    bad_request, unauthorized, not_found, forbidden, something_went_wrong
+    bad_request, unauthorized, not_found, forbidden, conflict, something_went_wrong
 };
 
 fn my_handler() -> Result<(), Error> {
@@ -274,10 +276,52 @@ fn my_handler() -> Result<(), Error> {
     Err(forbidden!("Insufficient permissions"))
     Err(not_found!("User not found"))
 
+    // 409 Conflict: {"error": "Order 42 is already paid"}
+    Err(conflict!("Order {} is already paid", 42))
+
     // Internal error (details logged, generic message to client)
     Err(something_went_wrong!("DB connection failed: {}", err))
 }
 ```
+
+With the `diesel` feature, `?` on a `diesel::result::Error` maps a unique-constraint violation to
+`Error::Conflict` (409, `"Conflict on <constraint>"`, or `"Conflict"` when Postgres reports no
+constraint name). Every other Diesel error stays a 500.
+
+#### Internal errors from validators
+
+A custom validator that cannot decide (for example its database lookup failed) should return
+`ValidationError::internal(err)` instead of unwrapping or returning a misleading 400. When the
+validation result of `ValidatedJson` / `ValidatedJsonWithCtx` contains such an error (anywhere,
+including nested structs and lists), the request fails with a 500 (`something_went_wrong!`
+carrying the error's message) instead of a 400 field-validation error:
+
+```rust
+use web_core_validator::ValidationError;
+
+async fn unique_email(email: &str, ctx: &mut ValidatorContext<AppState>) -> Result<(), ValidationError> {
+    let taken = email_exists(ctx.state(), email)
+        .await
+        .map_err(ValidationError::internal)?; // code "__internal__", message = err.to_string()
+    if taken {
+        return Err(("email_taken", "Email is already registered").into());
+    }
+    Ok(())
+}
+```
+
+`ValidationError::is_internal()` tells such errors apart.
+
+### Logging (tracing)
+
+web-core logs through [`tracing`](https://docs.rs/tracing), so install a subscriber in your
+binary (for example `tracing_subscriber::fmt::init()`), otherwise nothing is printed.
+
+- The request logger (`with_logging_layer`) emits one `info` event per request with the fields
+  `status`, `method`, `uri`, `client_ip` (`x-forwarded-for` or `unknown`) and `elapsed_ms`; the
+  message keeps the old `[200 OK] GET /path from 1.2.3.4 in 3.2ms` shape.
+- 500 responses (`SomethingWentWrong`) emit an `error` event with the fields `error_id` and
+  `details`.
 
 Error types automatically serialize to appropriate HTTP responses with consistent JSON structure.
 
@@ -321,6 +365,73 @@ app.delete_api("/api/posts/123", access_token).await?;
 ```
 
 ### Diesel Integration (feature: `diesel`)
+
+Sync pool (r2d2) with automatic database creation and embedded migrations, and pagination:
+
+```rust
+use diesel_migrations::{EmbeddedMigrations, embed_migrations};
+use web_core::diesel::{PaginatedLoad, create_pg_pool};
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+
+let pool = create_pg_pool(MIGRATIONS, &database_url).await?;
+let page: PaginatedResult<ProductDto> = products::table
+    .select(Product::as_select())
+    .paginated_load::<Product, ProductDto>(&params, &mut pool.get()?)?;
+```
+
+### Async Diesel (feature: `diesel-async`)
+
+`create_async_pg_pool` behaves like `create_pg_pool` (creates the database if missing, runs the
+pending embedded migrations on a sync connection inside `spawn_blocking`) and returns a
+deadpool pool of `diesel_async::AsyncPgConnection`s:
+
+```rust
+use web_core::diesel::{AsyncPaginatedLoad, AsyncPgPool, create_async_pg_pool};
+
+let pool: AsyncPgPool = create_async_pg_pool(MIGRATIONS, &database_url, 16).await?;
+let mut conn = pool.get().await?; // deadpool PoolError converts into web_core::error::Error
+
+let page: PaginatedResult<ProductDto> = products::table
+    .select(Product::as_select())
+    .order(products::id)
+    .paginated_load::<Product, ProductDto>(&params, &mut conn)
+    .await?;
+```
+
+`AsyncPaginatedLoad` runs the same SQL as `PaginatedLoad`
+(`SELECT *, COUNT(*) OVER () FROM (...) t LIMIT $1 OFFSET $2`) and its future is `Send`.
+Import either `PaginatedLoad` or `AsyncPaginatedLoad` in a module, not both: both provide
+`paginated_load` for every query, so having both in scope is ambiguous.
+
+### Per-test databases (feature: `diesel`)
+
+`web_core::test::TestDatabase` gives every test its own migrated Postgres database:
+
+```rust
+use web_core::test::TestDatabase;
+
+#[tokio::test]
+async fn creates_order() {
+    let db = TestDatabase::create(&std::env::var("TEST_DATABASE_URL").unwrap(), MIGRATIONS)
+        .await
+        .unwrap();
+    let pool = create_async_pg_pool(MIGRATIONS, &db.url, 4).await.unwrap();
+    // ... test against `pool` ...
+} // dropping `db` runs DROP DATABASE ... WITH (FORCE)
+```
+
+- `base_url` is any database URL on the target server; its database name is only used as a
+  prefix (`<name>_tpl_<hash>` for the template, `<name>_<random>` for test databases).
+- Once per process and migration set, a template database is created and migrated (serialised
+  across processes with a Postgres advisory lock); templates of older migration sets are dropped
+  when unused. Each `create` then clones the template with `CREATE DATABASE ... TEMPLATE`, which
+  is much faster than migrating per test.
+- The template hash covers the migration *names*: rename or add a migration (as diesel does for
+  new ones) to get a fresh template; editing an existing migration in place keeps the old one.
+- Needs Postgres 13+ (`DROP DATABASE ... WITH (FORCE)`) and a role allowed to create databases.
+
+#### JSONB
 
 JSONB support for PostgreSQL with automatic serialization:
 
@@ -401,11 +512,11 @@ send_email(
 | `middleware` | Logging and custom middleware support |
 | `validators` | `ValidatedJson`, password/phone validators, validation context |
 | `utils` | Ed25519 signing utilities |
-| `test` | Router testing helpers |
+| `test` | Router testing helpers, `TestDatabase` *(feature `diesel`)* |
 | `pagination` | Pagination utilities |
 | `web_core` | Core types: `WebCoreState`, `WebCoreOptions`, router extensions |
 | `axum` | Axum-specific utilities |
-| `diesel` | Diesel ORM integration with JSONB support |
+| `diesel` | Diesel ORM integration: sync/async pools, pagination, JSONB support |
 | `reqwest` | Reqwest client utilities |
 | `aws` *(feature)* | AWS SES email utilities |
 
@@ -419,6 +530,7 @@ All errors implement `IntoResponse` for seamless use in Axum handlers:
 | `BadRequestError` | 400 | General bad request |
 | `AuthenticationFailure` | 401 | Invalid or missing credentials |
 | `NotFound` | 404 | Resource not found |
+| `Conflict` | 409 | Conflicting state, e.g. unique-constraint violation (`conflict!`) |
 | `Forbidden` | 403 | Permission denied |
 | `SomethingWentWrong` | 500 | Internal server error (logs details, returns generic message) |
 

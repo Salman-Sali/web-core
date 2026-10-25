@@ -1,6 +1,7 @@
 pub trait ValidateNonControlCharacter {
     fn validate_non_control_character(&self) -> bool {
-        self.as_non_control_character_iterator().all(|code| !code.is_control())
+        self.as_non_control_character_iterator()
+            .all(|code| !code.is_control())
     }
 
     fn as_non_control_character_iterator(&self) -> Box<dyn Iterator<Item = char> + '_>;

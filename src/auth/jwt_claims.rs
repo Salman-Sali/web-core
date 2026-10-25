@@ -70,9 +70,7 @@ where
             let TypedHeader(Authorization(bearer)) =
                 TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state)
                     .await
-                    .map_err(|e| {
-                        unauthorized!("Error while getting bearer token : {:?}", e)
-                    })?;
+                    .map_err(|e| unauthorized!("Error while getting bearer token : {:?}", e))?;
 
             let state = WebCoreState::<()>::from_ref(state);
 

@@ -28,9 +28,10 @@ where
             async move {
                 if let Some(header_value) = request.headers().get(&key)
                     && let Ok(header_value) = header_value.to_str()
-                        && header_value == value {
-                            return next.run(request).await;
-                        }
+                    && header_value == value
+                {
+                    return next.run(request).await;
+                }
                 StatusCode::FORBIDDEN.into_response()
             }
         })

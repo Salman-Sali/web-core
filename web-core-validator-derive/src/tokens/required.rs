@@ -2,7 +2,7 @@ use quote::quote;
 use syn::Ident;
 
 use crate::types::Required;
-use crate::utils::{quote_code, quote_message, CrateName};
+use crate::utils::{CrateName, quote_code, quote_message};
 
 pub fn required_tokens(
     crate_name: &CrateName,

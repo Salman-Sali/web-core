@@ -34,8 +34,7 @@ pub async fn authentication_middleware(
         .decode_token::<_>(bearer.token(), TokenPurpose::Access)
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-    req.extensions_mut()
-        .insert(claims.additional_claims);
+    req.extensions_mut().insert(claims.additional_claims);
     let authenticated_user: AuthenticatedUser = claims.into();
     req.extensions_mut().insert(authenticated_user);
 
@@ -51,9 +50,13 @@ where
     T: Clone + Send + Sync + 'static,
 {
     fn with_auth_layer(self, auth_service: Arc<AuthService>) -> Self {
-        self.layer(middleware::from_fn(move |bearer: Result<TypedHeader<Authorization<Bearer>>, TypedHeaderRejection>, req: Request<Body>, next: Next| {
-            let auth_service = auth_service.clone();
-            async move { authentication_middleware(bearer, req, next, auth_service).await }
-        }))
+        self.layer(middleware::from_fn(
+            move |bearer: Result<TypedHeader<Authorization<Bearer>>, TypedHeaderRejection>,
+                  req: Request<Body>,
+                  next: Next| {
+                let auth_service = auth_service.clone();
+                async move { authentication_middleware(bearer, req, next, auth_service).await }
+            },
+        ))
     }
 }

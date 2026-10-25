@@ -33,9 +33,15 @@ impl serde::Serialize for SomethingWentWrong {
 }
 
 impl SomethingWentWrong {
+    /// Logs the error with `tracing::error!` (fields `error_id`, `details`).
     pub fn print_error(&self) {
-        eprintln!("Error: {}", self.error_id);
-        eprintln!("Something went wrong : {}", self.error_details);
+        tracing::error!(
+            error_id = %self.error_id,
+            details = %self.error_details,
+            "Error: {} Something went wrong : {}",
+            self.error_id,
+            self.error_details
+        );
     }
 }
 
