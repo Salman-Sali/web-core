@@ -1239,6 +1239,9 @@ name = "deadpool-runtime"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2657f61fb1dd8bf37a8d51093cc7cee4e77125b22f7753f49b289f831bec2bae"
+dependencies = [
+ "tokio",
+]
 
 [[package]]
 name = "der"
@@ -4778,7 +4781,7 @@ dependencies = [
 
 [[package]]
 name = "web-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "argon2",
  "askama",
@@ -4788,6 +4791,7 @@ dependencies = [
  "axum-extra",
  "base64",
  "chrono",
+ "deadpool",
  "diesel",
  "diesel-async",
  "diesel_migrations",

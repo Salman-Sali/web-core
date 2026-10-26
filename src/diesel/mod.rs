@@ -18,7 +18,10 @@ mod paginated_load;
 #[cfg(feature = "diesel-async")]
 pub use async_paginated_load::AsyncPaginatedLoad;
 #[cfg(feature = "diesel-async")]
-pub use async_pool::{AsyncPgPool, create_async_pg_pool};
+pub use async_pool::{
+    AsyncPgPool, AsyncPgPoolOptions, create_async_pg_pool, create_async_pg_pool_with_options,
+    create_async_pg_pool_without_migrations, retain_idle, run_pending_migrations,
+};
 pub use paginated_load::PaginatedLoad;
 
 pub async fn create_pg_pool(

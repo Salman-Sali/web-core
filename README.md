@@ -10,14 +10,14 @@ A Rust crate providing core utilities for building web applications with Axum. F
 
 ```toml
 [dependencies]
-web-core = { version = "0.4.0", features = ["derive"] }
+web-core = { version = "0.4.1", features = ["derive"] }
 
 [features]
 # Enables CORS allow-all for local development
 local = ["web-core/local"]
 
 [dev-dependencies]
-web-core = { version = "0.4.0", features = ["all"] }
+web-core = { version = "0.4.1", features = ["all"] }
 ```
 
 ### Crate Structure
@@ -327,13 +327,26 @@ Error types automatically serialize to appropriate HTTP responses with consisten
 
 ### CORS Configuration
 
-```rust
-use web_core::cors::CorsLayerExt;
+By default `with_web_core` allows the URLs given with `with_frontend_url` plus their www /
+non-www twin (debug builds allow every origin). An app can decide origins itself instead:
 
-// Automatic www/non-www handling
-let cors = CorsLayer::default()
-    .allow_origin(frontend_url.parse::<HeaderValue>()?);
+```rust
+use tower_http::cors::AllowOrigin;
+
+// Dynamic check, e.g. a tenant host cache; keeps web-core's headers/methods.
+let options = WebCoreOptions::new(web_core_state).with_allowed_origin(
+    AllowOrigin::async_predicate(move |origin, _parts| {
+        let hosts = hosts.clone();
+        async move { hosts.is_known_origin(&origin).await }
+    }),
+);
+
+// Or a complete custom layer (`web_core::cors::base_cors_layer()` is the default without origins).
+let options = WebCoreOptions::new(web_core_state).with_cors_layer(my_cors_layer);
 ```
+
+With a custom origin check or layer, `with_frontend_url` is not used for CORS and debug builds
+do not allow every origin.
 
 ### Testing Utilities
 
@@ -397,6 +410,32 @@ let page: PaginatedResult<ProductDto> = products::table
     .order(products::id)
     .paginated_load::<Product, ProductDto>(&params, &mut conn)
     .await?;
+```
+
+#### Pools for existing databases (e.g. per tenant)
+
+`create_async_pg_pool_without_migrations` and `create_async_pg_pool_with_options` neither create
+the database nor run migrations, and open no connection until the first `pool.get()` (a missing
+database makes that `get()` fail). Migrations run as an explicit step with
+`run_pending_migrations`. deadpool has no idle timeout; `retain_idle` closes idle connections
+and is meant to be called from one app-wide interval. Dropping the last pool handle closes its
+idle connections (checked-out ones close when released).
+
+```rust
+use web_core::diesel::{
+    AsyncPgPoolOptions, create_async_pg_pool_with_options, retain_idle, run_pending_migrations,
+};
+
+let pool = create_async_pg_pool_with_options(
+    &tenant_url,
+    AsyncPgPoolOptions::new(3).with_wait_timeout(Duration::from_secs(5)),
+)?;
+
+// migrate-all
+run_pending_migrations(MIGRATIONS, &tenant_url).await?;
+
+// every 30 s, over all cached pools
+let closed: usize = retain_idle(&pool, Duration::from_secs(60));
 ```
 
 `AsyncPaginatedLoad` runs the same SQL as `PaginatedLoad`

@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use crate::{
     auth::auth_service::AuthService,
-    cors::WithCorsLayer,
+    cors::{WithCorsLayer, base_cors_layer},
     middleware::{
         logging_middleware::LoggingMiddlewareLayer, middleware_handler::crate_middleware_handler,
     },
 };
 use axum::{Router, body::Body, extract::Request, middleware::Next, response::Response};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 pub trait WebCore<T>
 where
@@ -28,10 +29,14 @@ where
         let WebCoreOptions {
             web_core_state,
             frontend_urls: frontend_url,
+            cors_layer,
         } = options;
-        self.with_logging_layer()
-            .with_cors_layer(frontend_url)
-            .with_state(web_core_state)
+        let router = self.with_logging_layer();
+        let router = match cors_layer {
+            Some(cors_layer) => router.layer(cors_layer),
+            None => router.with_cors_layer(frontend_url),
+        };
+        router.with_state(web_core_state)
     }
 
     fn with_middleware<F, Fut>(self, handler: F) -> Router<WebCoreState<T>>
@@ -50,6 +55,7 @@ where
 {
     web_core_state: WebCoreState<T>,
     frontend_urls: Vec<String>,
+    cors_layer: Option<CorsLayer>,
 }
 
 impl<T> WebCoreOptions<T>
@@ -60,12 +66,27 @@ where
         Self {
             web_core_state,
             frontend_urls: vec![],
+            cors_layer: None,
         }
     }
 
     pub fn with_frontend_url(mut self, frontend_url: String) -> Self {
         self.frontend_urls.push(frontend_url);
         self
+    }
+
+    /// Uses `cors_layer` instead of the one built from the frontend URLs
+    /// ([`with_frontend_url`](Self::with_frontend_url) is then ignored for CORS).
+    pub fn with_cors_layer(mut self, cors_layer: CorsLayer) -> Self {
+        self.cors_layer = Some(cors_layer);
+        self
+    }
+
+    /// Keeps web-core's CORS settings ([`base_cors_layer`]) but decides the allowed origins with
+    /// `allow_origin`, e.g. `AllowOrigin::async_predicate(...)` looking the origin up in a
+    /// tenant cache. Unlike the frontend-URL default, debug builds do not allow every origin.
+    pub fn with_allowed_origin(self, allow_origin: impl Into<AllowOrigin>) -> Self {
+        self.with_cors_layer(base_cors_layer().allow_origin(allow_origin))
     }
 }
 

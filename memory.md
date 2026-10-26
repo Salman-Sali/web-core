@@ -17,6 +17,7 @@
 - Feature-gated modules (`aws`, `diesel`, `diesel-async`, `derive`)
 - Trait-based extensibility (`AuthHandler`, `PasswordHandler`, `WebCore`)
 - Uniform error handling with `IntoResponse` impls
+- CORS: default from `with_frontend_url` (+ www twin, Any in debug); `WebCoreOptions::with_allowed_origin(AllowOrigin)` / `with_cors_layer(CorsLayer)` override it (`cors::base_cors_layer()` = headers/methods, no origins)
 - JWT-based auth with HS512 signing
 
 ## Key Locations
@@ -76,6 +77,8 @@
 - Projects import either `PaginatedLoad` or `AsyncPaginatedLoad`, not both (same method name)
 - `TestDatabase` template name = `<base>_tpl_<8 hex FNV-1a of migration names>`; ready marker is a `COMMENT ON DATABASE`; Drop joins a std::thread running `DROP DATABASE ... WITH (FORCE)`
 - sqlx needs `runtime-tokio` (enabled in web-core since 0.4.0) for the database-exists/create check
+- Tenant pools (0.4.1): `create_async_pg_pool_without_migrations` / `create_async_pg_pool_with_options(url, AsyncPgPoolOptions)` never create the DB or migrate and are lazy; `run_pending_migrations` is the explicit step; `retain_idle(&pool, max_idle)` wraps `pool.retain` (deadpool `last_used` = time since last checkout). Direct `deadpool` dep only for `Runtime::Tokio1` (timeouts)
+- Postgres tests in `tests/postgres.rs` assert connection counts via `pg_stat_activity` (polling, backends exit async)
 - `cargo --all-features` needs nightly (`web-core-validator/derive_nightly_features`)
 
 ## ValidatorContext Notes

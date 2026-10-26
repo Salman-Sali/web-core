@@ -20,9 +20,11 @@ where
     }
 }
 
-pub fn generate_cors(frontend_urls: Vec<String>) -> CorsLayer {
-    #[allow(unused_mut)]
-    let mut cors = CorsLayer::new()
+/// The CORS layer web-core uses, without any allowed origin: no credentials, `Accept`,
+/// `Authorization` and `Content-Type` headers, and `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`.
+/// Add the origins with [`CorsLayer::allow_origin`].
+pub fn base_cors_layer() -> CorsLayer {
+    CorsLayer::new()
         .allow_credentials(false)
         .allow_headers([ACCEPT, AUTHORIZATION, CONTENT_TYPE])
         .allow_methods([
@@ -31,7 +33,11 @@ pub fn generate_cors(frontend_urls: Vec<String>) -> CorsLayer {
             Method::DELETE,
             Method::GET,
             Method::OPTIONS,
-        ]);
+        ])
+}
+
+pub fn generate_cors(frontend_urls: Vec<String>) -> CorsLayer {
+    let mut cors = base_cors_layer();
 
     let mut header_values: Vec<HeaderValue> = vec![];
 

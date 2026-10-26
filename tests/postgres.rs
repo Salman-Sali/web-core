@@ -5,14 +5,21 @@
 // The `QueryableByName` expansion below trips this lint on some toolchains.
 #![allow(clippy::redundant_field_names)]
 
+use std::time::{Duration, Instant};
+
 use diesel::{
-    Connection, ExpressionMethods, PgConnection, QueryDsl, QueryableByName, sql_types::Text,
+    Connection, ExpressionMethods, PgConnection, QueryDsl, QueryableByName,
+    sql_types::{BigInt, Text},
 };
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use diesel_migrations::{EmbeddedMigrations, embed_migrations};
 use url::Url;
 use web_core::{
-    diesel::{AsyncPaginatedLoad, create_async_pg_pool},
+    diesel::{
+        AsyncPaginatedLoad, AsyncPgPoolOptions, create_async_pg_pool,
+        create_async_pg_pool_with_options, create_async_pg_pool_without_migrations, retain_idle,
+        run_pending_migrations,
+    },
     error::Error,
     pagination::{PaginatedResult, PaginationQueryParams},
     test::TestDatabase,
@@ -196,4 +203,202 @@ async fn test_database_creates_isolated_databases_and_drops_them() {
     drop(b);
     drop(c);
     assert!(existing_databases(all).await.is_empty());
+}
+
+fn unique_name(prefix: &str) -> String {
+    format!(
+        "{prefix}_{}",
+        &uuid::Uuid::new_v4().simple().to_string()[..8]
+    )
+}
+
+async fn create_database(name: String) {
+    let maintenance = server_url("postgres").unwrap();
+    tokio::task::spawn_blocking(move || {
+        use diesel::connection::SimpleConnection;
+        let mut conn = PgConnection::establish(&maintenance).unwrap();
+        conn.batch_execute(&format!("CREATE DATABASE \"{name}\""))
+            .unwrap();
+    })
+    .await
+    .unwrap();
+}
+
+#[derive(QueryableByName)]
+struct Count {
+    #[diesel(sql_type = BigInt)]
+    count: i64,
+}
+
+/// Number of server backends connected to database `name`.
+async fn connection_count(name: &str) -> i64 {
+    let maintenance = server_url("postgres").unwrap();
+    let name = name.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let mut conn = PgConnection::establish(&maintenance).unwrap();
+        let rows: Vec<Count> = diesel::RunQueryDsl::load(
+            diesel::sql_query("SELECT count(*) AS count FROM pg_stat_activity WHERE datname = $1")
+                .bind::<Text, _>(name),
+            &mut conn,
+        )
+        .unwrap();
+        rows[0].count
+    })
+    .await
+    .unwrap()
+}
+
+/// Waits (up to 10 s) until database `name` has `expected` connections; backends exit
+/// asynchronously after the client closes the socket.
+async fn wait_for_connections(name: &str, expected: i64) {
+    let start = Instant::now();
+    loop {
+        let count = connection_count(name).await;
+        if count == expected {
+            return;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "database {name} has {count} connections, expected {expected}"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+async fn widget_count(pool: &web_core::diesel::AsyncPgPool) -> i64 {
+    let mut conn = pool.get().await.unwrap();
+    widgets::table.count().get_result(&mut conn).await.unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pool_without_migrations_is_lazy_and_never_creates_the_database() {
+    let name = unique_name("web_core_tenant");
+    let Some(url) = server_url(&name) else {
+        return;
+    };
+
+    // Missing database: building succeeds, the first get() fails, nothing is created.
+    let pool = create_async_pg_pool_without_migrations(&url, 2).unwrap();
+    assert_eq!(pool.status().max_size, 2);
+    assert!(pool.get().await.is_err());
+    assert!(existing_databases(vec![name.clone()]).await.is_empty());
+    drop(pool);
+
+    // Existing database: no connection until first use, no migrations run.
+    create_database(name.clone()).await;
+    let pool = create_async_pg_pool_with_options(
+        &url,
+        AsyncPgPoolOptions::new(2)
+            .with_wait_timeout(Duration::from_secs(5))
+            .with_create_timeout(Duration::from_secs(5))
+            .with_recycle_timeout(Duration::from_secs(5)),
+    )
+    .unwrap();
+    assert_eq!(pool.status().size, 0);
+    assert_eq!(connection_count(&name).await, 0);
+    {
+        let mut conn = pool.get().await.unwrap();
+        let missing = widgets::table.count().get_result::<i64>(&mut conn).await;
+        assert!(missing.is_err(), "migrations must not have run");
+    }
+    assert_eq!(connection_count(&name).await, 1);
+
+    // Explicit migration step, then the table exists.
+    run_pending_migrations(MIGRATIONS, &url).await.unwrap();
+    run_pending_migrations(MIGRATIONS, &url).await.unwrap();
+    assert_eq!(widget_count(&pool).await, 0);
+
+    drop(pool);
+    drop_database(name.clone()).await;
+    assert!(existing_databases(vec![name]).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn retain_idle_closes_only_idle_connections() {
+    let name = unique_name("web_core_reaper");
+    let Some(url) = server_url(&name) else {
+        return;
+    };
+    create_database(name.clone()).await;
+    let pool = create_async_pg_pool_without_migrations(&url, 3).unwrap();
+
+    // Open three connections and return them to the pool.
+    {
+        let (a, b, c) = tokio::join!(pool.get(), pool.get(), pool.get());
+        let _conns = (a.unwrap(), b.unwrap(), c.unwrap());
+    }
+    assert_eq!(pool.status().size, 3);
+    wait_for_connections(&name, 3).await;
+
+    // Nothing is idle for long enough yet.
+    assert_eq!(retain_idle(&pool, Duration::from_secs(60)), 0);
+    assert_eq!(pool.status().size, 3);
+
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+
+    // One connection is checked out (fresh use); the two idle ones are closed.
+    let held = pool.get().await.unwrap();
+    assert_eq!(retain_idle(&pool, Duration::from_secs(1)), 2);
+    assert_eq!(pool.status().size, 1);
+    wait_for_connections(&name, 1).await;
+
+    // Returned, but used just now: kept.
+    drop(held);
+    assert_eq!(retain_idle(&pool, Duration::from_secs(1)), 0);
+    assert_eq!(pool.status().size, 1);
+
+    tokio::time::sleep(Duration::from_millis(1200)).await;
+    assert_eq!(retain_idle(&pool, Duration::from_secs(1)), 1);
+    assert_eq!(pool.status().size, 0);
+    wait_for_connections(&name, 0).await;
+
+    // The pool still works after being emptied.
+    let conn = pool.get().await.unwrap();
+    drop(conn);
+    wait_for_connections(&name, 1).await;
+
+    drop(pool);
+    drop_database(name.clone()).await;
+    assert!(existing_databases(vec![name]).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dropping_the_pool_closes_its_connections() {
+    let name = unique_name("web_core_droppool");
+    let Some(url) = server_url(&name) else {
+        return;
+    };
+    create_database(name.clone()).await;
+
+    // Idle connections close when the last pool handle is dropped.
+    let pool = create_async_pg_pool_without_migrations(&url, 2).unwrap();
+    let clone = pool.clone();
+    {
+        let (a, b) = tokio::join!(pool.get(), pool.get());
+        let _conns = (a.unwrap(), b.unwrap());
+    }
+    wait_for_connections(&name, 2).await;
+    drop(pool);
+    // A clone keeps the pool (and its connections) alive.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(connection_count(&name).await, 2);
+    drop(clone);
+    wait_for_connections(&name, 0).await;
+
+    // A connection checked out when the pool is dropped closes when it is released.
+    let pool = create_async_pg_pool_without_migrations(&url, 2).unwrap();
+    let held = {
+        let (a, b) = tokio::join!(pool.get(), pool.get());
+        let held = a.unwrap();
+        drop(b);
+        held
+    };
+    wait_for_connections(&name, 2).await;
+    drop(pool);
+    wait_for_connections(&name, 1).await;
+    drop(held);
+    wait_for_connections(&name, 0).await;
+
+    drop_database(name.clone()).await;
+    assert!(existing_databases(vec![name]).await.is_empty());
 }
