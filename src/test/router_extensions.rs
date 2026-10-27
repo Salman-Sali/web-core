@@ -6,7 +6,8 @@ use std::{
 use async_trait::async_trait;
 use axum::{Router, body::to_bytes, http::Request};
 use http::StatusCode;
-use lambda_http::{Body, tower::ServiceExt};
+use axum::body::Body;
+use tower::ServiceExt;
 
 pub trait JsonType:
     serde::Serialize + serde::de::DeserializeOwned + Debug + Send + Sync + 'static
@@ -122,11 +123,11 @@ impl RouterExtensions for Router {
         let request = if let Some(r) = request {
             request_builder
                 .header("content-type", "application/json")
-                .body(Body::Text(
+                .body(Body::from(
                     serde_json::to_string(&r).expect("Error while converting request into json."),
                 ))
         } else {
-            request_builder.body(Body::Empty)
+            request_builder.body(Body::empty())
         }
         .expect("Error while creating request.");
         self.one_shot::<R, E>(request).await
@@ -143,11 +144,11 @@ impl RouterExtensions for Router {
         let request = if let Some(r) = request {
             request_builder
                 .header("content-type", "application/json")
-                .body(Body::Text(
+                .body(Body::from(
                     serde_json::to_string(&r).expect("Error while converting request into json."),
                 ))
         } else {
-            request_builder.body(Body::Empty)
+            request_builder.body(Body::empty())
         }
         .expect("Error while creating request.");
         self.one_shot::<R, E>(request).await
@@ -168,7 +169,7 @@ impl RouterExtensions for Router {
             .uri(path)
             .header("content-type", "application/json")
             .header("Authorization", format!("Bearer {access_token}"))
-            .body(Body::Text(
+            .body(Body::from(
                 serde_json::to_string(&request).expect("Error while converting request into json."),
             ))
             .expect("Error while creating request.");
@@ -183,7 +184,7 @@ impl RouterExtensions for Router {
         let request = Request::builder()
             .method("GET")
             .uri(path)
-            .body(Body::Empty)
+            .body(Body::empty())
             .expect("Error while creating request.");
         self.one_shot(request).await
     }
@@ -201,7 +202,7 @@ impl RouterExtensions for Router {
             .method("GET")
             .uri(path)
             .header("Authorization", format!("Bearer {access_token}"))
-            .body(Body::Empty)
+            .body(Body::empty())
             .expect("Error while creating request.");
         self.one_shot(request).await
     }
@@ -214,7 +215,7 @@ impl RouterExtensions for Router {
             .method("DELETE")
             .uri(path)
             .header("Authorization", format!("Bearer {access_token}"))
-            .body(Body::Empty)
+            .body(Body::empty())
             .expect("Error while creating request.");
         self.one_shot::<(), E>(request).await
     }
