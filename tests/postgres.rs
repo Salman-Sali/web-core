@@ -16,9 +16,9 @@ use diesel_migrations::{EmbeddedMigrations, embed_migrations};
 use url::Url;
 use web_core::{
     diesel::{
-        AsyncPaginatedLoad, AsyncPgPoolOptions, create_async_pg_pool,
-        create_async_pg_pool_with_options, create_async_pg_pool_without_migrations, retain_idle,
-        run_pending_migrations,
+        AsyncPaginatedLoad, AsyncPgPoolOptions, PgPoolSize, create_async_pg_pool,
+        create_async_pg_pool_with_options, create_async_pg_pool_without_migrations, create_pg_pool,
+        create_pg_pool_sized, retain_idle, run_pending_migrations,
     },
     error::Error,
     pagination::{PaginatedResult, PaginationQueryParams},
@@ -401,4 +401,101 @@ async fn dropping_the_pool_closes_its_connections() {
 
     drop_database(name.clone()).await;
     assert!(existing_databases(vec![name]).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn create_pg_pool_keeps_r2d2_defaults() {
+    let name = unique_name("web_core_syncpool");
+    let Some(url) = server_url(&name) else {
+        return;
+    };
+
+    // Creates the database, migrates and opens all 10 connections up front.
+    let pool = create_pg_pool(MIGRATIONS, &url).await.unwrap();
+    assert_eq!(pool.max_size(), 10);
+    assert_eq!(pool.min_idle(), None);
+    assert_eq!(pool.state().connections, 10);
+    wait_for_connections(&name, 10).await;
+    {
+        let mut conn = pool.get().unwrap();
+        diesel::RunQueryDsl::execute(
+            diesel::insert_into(widgets::table).values(widgets::name.eq("a")),
+            &mut conn,
+        )
+        .unwrap();
+    }
+
+    drop(pool);
+    drop_database(name.clone()).await;
+    assert!(existing_databases(vec![name]).await.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn create_pg_pool_sized_honours_max_size_and_min_idle() {
+    let name = unique_name("web_core_sizedpool");
+    let Some(url) = server_url(&name) else {
+        return;
+    };
+
+    let pool = create_pg_pool_sized(MIGRATIONS, &url, PgPoolSize::new(3).with_min_idle(1))
+        .await
+        .unwrap();
+    assert_eq!(
+        existing_databases(vec![name.clone()]).await,
+        vec![name.clone()]
+    );
+    assert_eq!(pool.max_size(), 3);
+    assert_eq!(pool.min_idle(), Some(1));
+    // Only `min_idle` connections are opened at startup.
+    assert_eq!(pool.state().connections, 1);
+    wait_for_connections(&name, 1).await;
+
+    {
+        let conns: Vec<_> = (0..3).map(|_| pool.get().unwrap()).collect();
+        assert_eq!(pool.state().connections, 3);
+        // No fourth connection.
+        assert!(pool.get_timeout(Duration::from_millis(200)).is_err());
+        let mut conn = conns.into_iter().next().unwrap();
+        diesel::RunQueryDsl::execute(
+            diesel::insert_into(widgets::table).values(widgets::name.eq("a")),
+            &mut conn,
+        )
+        .unwrap();
+    }
+    drop(pool);
+
+    // `min_idle(0)` opens nothing until the first `get()`; migrations are a no-op the second time.
+    let pool = create_pg_pool_sized(MIGRATIONS, &url, PgPoolSize::new(2).with_min_idle(0))
+        .await
+        .unwrap();
+    assert_eq!(pool.state().connections, 0);
+    {
+        let mut conn = pool.get().unwrap();
+        let count: i64 =
+            diesel::RunQueryDsl::get_result(widgets::table.count(), &mut conn).unwrap();
+        assert_eq!(count, 1);
+    }
+    assert_eq!(pool.state().connections, 1);
+
+    drop(pool);
+    drop_database(name.clone()).await;
+    assert!(existing_databases(vec![name]).await.is_empty());
+}
+
+#[tokio::test]
+async fn create_pg_pool_sized_rejects_invalid_sizes_without_connecting() {
+    // Unreachable URL: the size check fails before any connection attempt.
+    let url = "postgres://nobody@127.0.0.1:1/web_core_never_created";
+    assert_eq!(PgPoolSize::default(), PgPoolSize::new(10));
+    let err = create_pg_pool_sized(MIGRATIONS, url, PgPoolSize::new(0))
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("max_size must be positive"),
+        "{err:?}"
+    );
+    let err = create_pg_pool_sized(MIGRATIONS, url, PgPoolSize::new(2).with_min_idle(3))
+        .await
+        .unwrap_err();
+    assert!(format!("{err:?}").contains("min_idle (3)"), "{err:?}");
 }

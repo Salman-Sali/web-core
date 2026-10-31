@@ -24,14 +24,93 @@ pub use async_pool::{
 };
 pub use paginated_load::PaginatedLoad;
 
+/// Creates the database named in `database_url` (with sqlx) when it is missing, runs the pending
+/// embedded `migrations` and returns an r2d2 pool of `PgConnection`s with r2d2's default size
+/// (at most 10 connections, all opened up front).
+///
+/// Same as [`create_pg_pool_sized`]`(migrations, database_url, PgPoolSize::default())`; use that
+/// to choose the pool size.
 pub async fn create_pg_pool(
     migrations: EmbeddedMigrations,
     database_url: &str,
+) -> Result<Pool<ConnectionManager<PgConnection>>, Error> {
+    create_pg_pool_sized(migrations, database_url, PgPoolSize::default()).await
+}
+
+/// Size of the r2d2 pool built by [`create_pg_pool_sized`].
+///
+/// `max_size` is the most connections the pool holds. `min_idle` is how many idle connections
+/// r2d2 keeps open (and opens before the pool is returned); `None` means r2d2's default of
+/// `max_size`, i.e. every connection is opened at startup.
+///
+/// `PgPoolSize::default()` is r2d2's default: `max_size` 10, `min_idle` `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PgPoolSize {
+    pub max_size: u32,
+    pub min_idle: Option<u32>,
+}
+
+impl PgPoolSize {
+    /// `max_size` connections at most, r2d2's default `min_idle` (`max_size`).
+    pub fn new(max_size: u32) -> Self {
+        Self {
+            max_size,
+            min_idle: None,
+        }
+    }
+
+    /// Keeps at most `min_idle` idle connections open instead of `max_size`, e.g. `0` to open
+    /// connections only on demand.
+    pub fn with_min_idle(mut self, min_idle: u32) -> Self {
+        self.min_idle = Some(min_idle);
+        self
+    }
+}
+
+impl Default for PgPoolSize {
+    fn default() -> Self {
+        Self::new(10)
+    }
+}
+
+/// [`create_pg_pool`] with a caller-chosen pool `size`: creates the database named in
+/// `database_url` (with sqlx) when it is missing, runs the pending embedded `migrations` and
+/// returns an r2d2 pool of `PgConnection`s.
+///
+/// Returns an error (before touching the database) when `size.max_size` is 0 or
+/// `size.min_idle` is larger than `size.max_size`.
+///
+/// ```rust,ignore
+/// use diesel_migrations::{EmbeddedMigrations, embed_migrations};
+/// use web_core::diesel::{PgPoolSize, create_pg_pool_sized};
+///
+/// const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+///
+/// // At most 4 connections, keep at most 1 idle one.
+/// let pool = create_pg_pool_sized(MIGRATIONS, &database_url, PgPoolSize::new(4).with_min_idle(1)).await?;
+/// ```
+pub async fn create_pg_pool_sized(
+    migrations: EmbeddedMigrations,
+    database_url: &str,
+    size: PgPoolSize,
 ) -> Result<Pool<ConnectionManager<PgConnection>>, Error> {
     use diesel::Connection;
     use diesel_migrations::MigrationHarness;
 
     use crate::something_went_wrong;
+    if size.max_size == 0 {
+        return Err(something_went_wrong!("Pool max_size must be positive"));
+    }
+    if let Some(min_idle) = size.min_idle
+        && min_idle > size.max_size
+    {
+        return Err(something_went_wrong!(
+            "Pool min_idle ({}) must be no larger than max_size ({})",
+            min_idle,
+            size.max_size
+        ));
+    }
+
     ensure_database_exists(database_url).await?;
 
     let mut setup_conn =
@@ -42,7 +121,9 @@ pub async fn create_pg_pool(
     drop(setup_conn);
 
     let manager = ConnectionManager::<PgConnection>::new(database_url);
-    let pool_builder = diesel::r2d2::Pool::builder();
+    let pool_builder = diesel::r2d2::Pool::builder()
+        .max_size(size.max_size)
+        .min_idle(size.min_idle);
     Ok(pool_builder.build(manager)?)
 }
 

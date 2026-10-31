@@ -1,6 +1,6 @@
 [package]
 name = "web-core"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 description = "Core utils for Axum projects"
 homepage = "https://github.com/Salman-Sali/web-core"

@@ -393,6 +393,18 @@ let page: PaginatedResult<ProductDto> = products::table
     .paginated_load::<Product, ProductDto>(&params, &mut pool.get()?)?;
 ```
 
+`create_pg_pool` uses r2d2's default size: at most 10 connections, all opened at startup. To
+size the pool, use `create_pg_pool_sized` (same database creation and migrations) with a
+`PgPoolSize`; `min_idle` is how many idle connections r2d2 keeps open (and opens up front),
+`None` meaning `max_size`:
+
+```rust
+use web_core::diesel::{PgPoolSize, create_pg_pool_sized};
+
+// At most 4 connections, only 1 opened at startup.
+let pool = create_pg_pool_sized(MIGRATIONS, &database_url, PgPoolSize::new(4).with_min_idle(1)).await?;
+```
+
 ### Async Diesel (feature: `diesel-async`)
 
 `create_async_pg_pool` behaves like `create_pg_pool` (creates the database if missing, runs the
