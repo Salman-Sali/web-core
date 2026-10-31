@@ -1,6 +1,6 @@
 [package]
 name = "web-core"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2024"
 description = "Core utils for Axum projects"
 homepage = "https://github.com/Salman-Sali/web-core"
@@ -53,7 +53,7 @@ diesel-async = ["diesel", "dep:diesel-async", "dep:deadpool"]
 all = ["aws", "derive", "diesel", "diesel-async"]
 
 [workspace]
-members = ["web-core-derive", "web-core-validator", "web-core-validator-derive", "web-core-backup"]
+members = ["web-core-derive", "web-core-validator", "web-core-validator-derive", "web-core-backup", "web-core-runners"]
 
 [dev-dependencies]
 web-core = { path = ".", features = ["all"]}
@@ -66,6 +66,8 @@ url = "2.5.7"
 uuid = { version = "1.18.1", features = ["v4"] }
 
 [workspace.dependencies]
-web-core-derive = { version = "0.4.0", path = "./web-core-derive" }
-web-core-validator = { version = "0.4.0", path = "./web-core-validator" }
-web-core-validator-derive = { version = "0.4.0", path = "./web-core-validator-derive" }
+web-core-derive = { version = "0.5.0", path = "./web-core-derive" }
+web-core-validator = { version = "0.5.0", path = "./web-core-validator" }
+web-core-validator-derive = { version = "0.5.0", path = "./web-core-validator-derive" }
+web-core = { version = "0.5.0", path = "." }
+web-core-runners = { version = "0.5.0", path = "./web-core-runners" }

@@ -1,0 +1,75 @@
+[package]
+name = "web-core-runners"
+version = "0.5.0"
+edition = "2024"
+description = "Remote task runners for web-core apps: protocol, runner runtime and app-side pool"
+homepage = "https://github.com/Salman-Sali/web-core"
+license = "MIT"
+
+[dependencies]
+# protocol (always)
+hex = "0.4.3"
+schemars = "1.2.3"
+serde = { version = "1.0.225", features = ["derive"] }
+serde_json = "1.0.145"
+sha2 = "0.10.9"
+thiserror = "2.0.16"
+tracing = "0.1.44"
+uuid = { version = "1.18.1", features = ["v4", "serde"] }
+
+# shared by app and runner
+async-trait = { version = "0.1.89", optional = true }
+futures = { version = "0.3.31", optional = true }
+tokio = { version = "1.54.1", features = ["rt", "sync", "time", "macros", "fs", "io-util", "process"], optional = true }
+tokio-util = { version = "0.7.16", features = ["io"], optional = true }
+
+# app
+axum = { version = "0.8.8", features = ["ws"], optional = true }
+chrono = { version = "0.4.42", features = ["serde"], optional = true }
+ed25519-dalek = { version = "2.2.0", optional = true }
+rand_core = { version = "0.6.4", features = ["getrandom"], optional = true }
+web-core = { workspace = true, optional = true }
+
+# runner
+gethostname = { version = "1.1.0", optional = true }
+libc = { version = "0.2.191", optional = true }
+reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls", "stream", "http2"], optional = true }
+rusqlite = { version = "0.32.1", features = ["bundled"], optional = true }
+tokio-tungstenite = { version = "0.28.0", features = ["rustls-tls-webpki-roots"], optional = true }
+tracing-subscriber = { version = "0.3.22", optional = true }
+
+[features]
+default = []
+app = [
+    "dep:async-trait",
+    "dep:futures",
+    "dep:tokio",
+    "dep:tokio-util",
+    "dep:axum",
+    "dep:chrono",
+    "dep:ed25519-dalek",
+    "dep:rand_core",
+    "dep:web-core",
+]
+runner = [
+    "dep:async-trait",
+    "dep:futures",
+    "dep:tokio",
+    "tokio/rt-multi-thread",
+    "tokio/signal",
+    "dep:tokio-util",
+    "dep:gethostname",
+    "dep:libc",
+    "dep:reqwest",
+    "dep:rusqlite",
+    "dep:tokio-tungstenite",
+    "dep:tracing-subscriber",
+]
+
+[dev-dependencies]
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros"] }
+
+[[test]]
+name = "pool"
+required-features = ["app", "runner"]

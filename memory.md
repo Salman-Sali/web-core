@@ -38,6 +38,7 @@
 | `web-core-validator/` | Validation traits and implementations (state-aware) |
 | `web-core-validator-derive/` | Procedural macros for derive(Validate) |
 | `web-core-backup/` | Postgres + folder backups to S3, `<bin> backup` / `<bin> restore` subcommands, scheduler |
+| `web-core-runners/` | Remote task runners (0.5.0): `protocol` (messages, `Task`, `Contract` hash), `runner` feature (runtime, child-process tasks, sqlite bookkeeping), `app` feature (`RunnerPool` in-memory scheduler/leases, `RunnerStore` trait the app implements, routes, local fallback, `InProcessRunner`); spec in `docs/runners-plan.md` + `docs/runners-protocol.md`; rusqlite pinned to 0.32 (libsqlite3-sys must match sqlx-sqlite's) |
 
 ## Documentation
 | File | Description |
@@ -78,7 +79,7 @@
 - `TestDatabase` template name = `<base>_tpl_<8 hex FNV-1a of migration names>`; ready marker is a `COMMENT ON DATABASE`; Drop joins a std::thread running `DROP DATABASE ... WITH (FORCE)`
 - sqlx needs `runtime-tokio` (enabled in web-core since 0.4.0) for the database-exists/create check
 - Tenant pools (0.4.1): `create_async_pg_pool_without_migrations` / `create_async_pg_pool_with_options(url, AsyncPgPoolOptions)` never create the DB or migrate and are lazy; `run_pending_migrations` is the explicit step; `retain_idle(&pool, max_idle)` wraps `pool.retain` (deadpool `last_used` = time since last checkout). Direct `deadpool` dep only for `Runtime::Tokio1` (timeouts)
-- Sized sync pool (0.4.2): `create_pg_pool_sized(migrations, url, PgPoolSize { max_size, min_idle })` (builder: `PgPoolSize::new(n).with_min_idle(k)`); `create_pg_pool` delegates with `PgPoolSize::default()` (r2d2 default: 10, min_idle None = all opened at startup). Invalid sizes (max 0, min_idle > max) return an error instead of r2d2's panic
+- Sized sync pool (0.5.0): `create_pg_pool_sized(migrations, url, PgPoolSize { max_size, min_idle })` (builder: `PgPoolSize::new(n).with_min_idle(k)`); `create_pg_pool` delegates with `PgPoolSize::default()` (r2d2 default: 10, min_idle None = all opened at startup). Invalid sizes (max 0, min_idle > max) return an error instead of r2d2's panic
 - Postgres tests in `tests/postgres.rs` assert connection counts via `pg_stat_activity` (polling, backends exit async)
 - `cargo --all-features` needs nightly (`web-core-validator/derive_nightly_features`)
 

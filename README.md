@@ -10,14 +10,14 @@ A Rust crate providing core utilities for building web applications with Axum. F
 
 ```toml
 [dependencies]
-web-core = { version = "0.4.1", features = ["derive"] }
+web-core = { version = "0.5.0", features = ["derive"] }
 
 [features]
 # Enables CORS allow-all for local development
 local = ["web-core/local"]
 
 [dev-dependencies]
-web-core = { version = "0.4.1", features = ["all"] }
+web-core = { version = "0.5.0", features = ["all"] }
 ```
 
 ### Crate Structure
@@ -31,6 +31,7 @@ This workspace contains four crates:
 | `web-core-validator` | Validation traits and implementations (fork of Keats/validator) |
 | `web-core-validator-derive` | Procedural macros for `derive(Validate)` |
 | `web-core-backup` | Postgres + folder backups to S3 with `backup`/`restore` subcommands ([README](web-core-backup/README.md)) |
+| `web-core-runners` | Remote task runners: wire protocol, runner runtime (feature `runner`) and app-side pool (feature `app`) ([README](web-core-runners/README.md)) |
 
 ### Optional Features
 
@@ -552,6 +553,31 @@ send_email(
     "Plain text body"
 ).await?;
 ```
+
+## Remote Task Runners (`web-core-runners`)
+
+`web-core-runners` (0.5.0) moves CPU-heavy, pure units of work (**tasks**) out of the API onto
+**runners**: separate binaries on other machines that dial out to the app over a WebSocket.
+Files go over HTTPS with signed, expiring, resumable URLs; orchestration and the database stay
+in the app.
+
+| Feature | For | Main items |
+|---------|-----|------------|
+| (none) | the product's contract crate | `protocol::Task`, `protocol::Contract` (contract hash), the wire messages |
+| `runner` | the product's runner binary | `runner::TaskRegistry`, `runner::main`, `TaskContext` |
+| `app` | the API | `app::RunnerPool` (`submit`, `submit_typed`, admin operations, `router()`), `app::RunnerStore`, `app::LocalFallbackSupervisor` |
+| `app` + `runner` | app tests | `app::InProcessRunner`, `app::InProcessSpawner` |
+
+```toml
+[dependencies]
+web-core-runners = { version = "0.5.0", features = ["app"] }    # API
+# web-core-runners = { version = "0.5.0", features = ["runner"] } # runner binary
+```
+
+The crate owns no tables: the app implements `RunnerStore` over its own `runners`,
+`runner_tasks` and `runner_attempts` tables. See the [crate README](web-core-runners/README.md)
+for usage and the table shapes, [docs/runners-protocol.md](docs/runners-protocol.md) for the
+wire protocol and [docs/runners-plan.md](docs/runners-plan.md) for the design.
 
 ## Modules
 
