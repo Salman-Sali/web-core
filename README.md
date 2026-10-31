@@ -397,7 +397,8 @@ let page: PaginatedResult<ProductDto> = products::table
 `create_pg_pool` uses r2d2's default size: at most 10 connections, all opened at startup. To
 size the pool, use `create_pg_pool_sized` (same database creation and migrations) with a
 `PgPoolSize`; `min_idle` is how many idle connections r2d2 keeps open (and opens up front),
-`None` meaning `max_size`:
+`None` meaning `max_size`. `with_connection_timeout` shortens how long `get()` blocks waiting for
+a free connection (r2d2's default is 30 s):
 
 ```rust
 use web_core::diesel::{PgPoolSize, create_pg_pool_sized};

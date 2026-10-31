@@ -1,6 +1,6 @@
 [package]
 name = "web-core"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 description = "Core utils for Axum projects"
 homepage = "https://github.com/Salman-Sali/web-core"
@@ -69,5 +69,5 @@ uuid = { version = "1.18.1", features = ["v4"] }
 web-core-derive = { version = "0.5.0", path = "./web-core-derive" }
 web-core-validator = { version = "0.5.0", path = "./web-core-validator" }
 web-core-validator-derive = { version = "0.5.0", path = "./web-core-validator-derive" }
-web-core = { version = "0.5.0", path = "." }
+web-core = { version = "0.5.1", path = "." }
 web-core-runners = { version = "0.5.0", path = "./web-core-runners" }

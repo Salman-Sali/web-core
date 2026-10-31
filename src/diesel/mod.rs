@@ -43,11 +43,17 @@ pub async fn create_pg_pool(
 /// r2d2 keeps open (and opens before the pool is returned); `None` means r2d2's default of
 /// `max_size`, i.e. every connection is opened at startup.
 ///
-/// `PgPoolSize::default()` is r2d2's default: `max_size` 10, `min_idle` `None`.
+/// `connection_timeout` is how long `get()` waits for a free connection before failing; `None`
+/// means r2d2's default of 30 s. `get()` blocks its thread while it waits, so an async server
+/// sharing one pool between many requests wants it short.
+///
+/// `PgPoolSize::default()` is r2d2's default: `max_size` 10, `min_idle` `None`,
+/// `connection_timeout` `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PgPoolSize {
     pub max_size: u32,
     pub min_idle: Option<u32>,
+    pub connection_timeout: Option<std::time::Duration>,
 }
 
 impl PgPoolSize {
@@ -56,6 +62,7 @@ impl PgPoolSize {
         Self {
             max_size,
             min_idle: None,
+            connection_timeout: None,
         }
     }
 
@@ -63,6 +70,12 @@ impl PgPoolSize {
     /// connections only on demand.
     pub fn with_min_idle(mut self, min_idle: u32) -> Self {
         self.min_idle = Some(min_idle);
+        self
+    }
+
+    /// Fails `get()` after `timeout` without a free connection, instead of r2d2's 30 s.
+    pub fn with_connection_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.connection_timeout = Some(timeout);
         self
     }
 }
@@ -77,8 +90,8 @@ impl Default for PgPoolSize {
 /// `database_url` (with sqlx) when it is missing, runs the pending embedded `migrations` and
 /// returns an r2d2 pool of `PgConnection`s.
 ///
-/// Returns an error (before touching the database) when `size.max_size` is 0 or
-/// `size.min_idle` is larger than `size.max_size`.
+/// Returns an error (before touching the database) when `size.max_size` is 0,
+/// `size.min_idle` is larger than `size.max_size` or `size.connection_timeout` is zero.
 ///
 /// ```rust,ignore
 /// use diesel_migrations::{EmbeddedMigrations, embed_migrations};
@@ -110,6 +123,9 @@ pub async fn create_pg_pool_sized(
             size.max_size
         ));
     }
+    if size.connection_timeout.is_some_and(|t| t.is_zero()) {
+        return Err(something_went_wrong!("Pool connection_timeout must be positive"));
+    }
 
     ensure_database_exists(database_url).await?;
 
@@ -121,9 +137,12 @@ pub async fn create_pg_pool_sized(
     drop(setup_conn);
 
     let manager = ConnectionManager::<PgConnection>::new(database_url);
-    let pool_builder = diesel::r2d2::Pool::builder()
+    let mut pool_builder = diesel::r2d2::Pool::builder()
         .max_size(size.max_size)
         .min_idle(size.min_idle);
+    if let Some(timeout) = size.connection_timeout {
+        pool_builder = pool_builder.connection_timeout(timeout);
+    }
     Ok(pool_builder.build(manager)?)
 }
 

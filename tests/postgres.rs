@@ -498,4 +498,15 @@ async fn create_pg_pool_sized_rejects_invalid_sizes_without_connecting() {
         .await
         .unwrap_err();
     assert!(format!("{err:?}").contains("min_idle (3)"), "{err:?}");
+    let err = create_pg_pool_sized(
+        MIGRATIONS,
+        url,
+        PgPoolSize::new(2).with_connection_timeout(std::time::Duration::ZERO),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        format!("{err:?}").contains("connection_timeout must be positive"),
+        "{err:?}"
+    );
 }
